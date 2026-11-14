@@ -1,0 +1,22 @@
+# 依赖
+node_modules/
+desktop/node_modules/
+
+# 构建产物
+desktop/build/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+
+# 便携运行时（体积较大，完整包见 Release）
+runtime/
+
+# 压缩包
+*.zip
+*.7z
+
+# 系统
+.DS_Store
+Thumbs.db

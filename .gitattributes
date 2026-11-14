@@ -1,0 +1,20 @@
+# 批处理必须是 CRLF，否则 cmd.exe 解析会出错
+*.bat text eol=crlf
+
+# 二进制资源，禁止换行/编码转换
+*.wasm binary
+*.task binary
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.zip binary
+
+# 文本统一 LF
+*.js text eol=lf
+*.mjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.py text eol=lf
