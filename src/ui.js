@@ -41,6 +41,7 @@ const ids = [
   'calResultTitle', 'calResultText', 'calResultMetrics', 'calIntro', 'calCountdown',
   'calPreview', 'calFace', 'calClose', 'btnCalFinish', 'btnCalRetry',
   'breakOverlay', 'breakCount', 'breakTrackBar', 'btnBreakDone', 'btnBreakSkip', 'breakFine',
+  'alignOverlay', 'alignCount', 'alignCancel',
 ];
 
 export const ui = {
@@ -51,6 +52,7 @@ export const ui = {
     bindTopbar();
     bindOnboard();
     bindSettings();
+    bindAlign();
     bindCalibration();
     bindBreak();
     bindChat();
@@ -475,6 +477,42 @@ export function calibrationEls() {
   };
 }
 
+/* ---------------- 视线对齐 ---------------- */
+
+let alignTimer = 0;
+
+export function startAlign() {
+  if (!E.alignOverlay) return;
+  E.alignOverlay.classList.add('open');
+  clearInterval(alignTimer);
+  let n = 3;
+  E.alignCount.textContent = String(n);
+  alignTimer = setInterval(() => {
+    n--;
+    if (n > 0) {
+      E.alignCount.textContent = String(n);
+      return;
+    }
+    clearInterval(alignTimer);
+    E.alignOverlay.classList.remove('open');
+    const g = app.gaze;
+    if (!g || !g.valid) {
+      toast('视线还没稳定', '等光标停稳后再试一次，或先做一次校准', 'warn', 4000);
+      return;
+    }
+    actions.applyCenterOffset && actions.applyCenterOffset({ x: g.x, y: g.y });
+  }, 800);
+}
+
+function bindAlign() {
+  if (E.alignCancel) {
+    E.alignCancel.addEventListener('click', () => {
+      clearInterval(alignTimer);
+      E.alignOverlay.classList.remove('open');
+    });
+  }
+}
+
 /* ---------------- 远眺 ---------------- */
 
 function bindBreak() {
@@ -782,6 +820,7 @@ Object.assign(ui, {
   refreshSettingsForm,
   applyBigTargets,
   updateOffsetUI,
+  startAlign,
   appendChat,
   showReport,
   calibrationEls,

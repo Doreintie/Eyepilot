@@ -319,19 +319,15 @@ const actions = {
     tracker.setOffset(nx, ny);
     ui.updateOffsetUI();
   },
-  centerOffset: () => {
-    const g = app.gaze;
-    if (!g || !g.valid) {
-      notifyAlert({ level: 'warn', title: '视线还没稳定', detail: '等光标停稳、能正常点击后，再看屏幕中心点一次「归中」。' });
-      return;
-    }
+  centerOffset: () => ui.startAlign(),
+  applyCenterOffset: (g) => {
     const s = app.settings;
     const nx = Math.max(-300, Math.min(300, (s.offsetX || 0) + (window.innerWidth / 2 - g.x)));
     const ny = Math.max(-300, Math.min(300, (s.offsetY || 0) + (window.innerHeight / 2 - g.y)));
     saveSettings({ offsetX: nx, offsetY: ny });
     tracker.setOffset(nx, ny);
     ui.updateOffsetUI();
-    notifyAlert({ level: 'good', title: '已归中', detail: `偏移设为 ${Math.round(nx)} , ${Math.round(ny)} px，看看光标是否对准屏幕中心。` });
+    notifyAlert({ level: 'good', title: '已对齐', detail: `偏移设为 ${Math.round(nx)} , ${Math.round(ny)} px。看看光标是否和视线重合。` });
   },
   resetOffset: () => {
     saveSettings({ offsetX: 0, offsetY: 0 });

@@ -487,12 +487,12 @@
 
         <div class="card">
           <div class="card-head"><h3>视线微调</h3><span class="pill tiny" id="offsetPill">偏移 0 , 0 px</span></div>
-          <p class="body-text">如果光标整体偏左或偏右：先看屏幕中心，再点「以当前注视点归中」；也可以用方向键微调，边看光标边推。</p>
+          <p class="body-text">如果光标整体偏左或偏右：点「看向屏幕中心归中」，然后盯着十字看 2 秒，系统会自动对齐。也可以用方向键微调。</p>
           <div class="nudge">
             <button class="btn ghost" data-offset="up" data-gaze>↑</button>
             <div class="nudge-row">
               <button class="btn ghost" data-offset="left" data-gaze>←</button>
-              <button class="btn primary sm" id="btnCenterOffset" data-gaze>以当前注视点归中</button>
+              <button class="btn primary sm" id="btnCenterOffset" data-gaze>看向屏幕中心归中</button>
               <button class="btn ghost" data-offset="right" data-gaze>→</button>
             </div>
             <button class="btn ghost" data-offset="down" data-gaze>↓</button>
@@ -565,6 +565,18 @@
       <button class="btn primary" id="btnCalFinish" data-gaze>开始眼控</button>
       <button class="btn ghost" id="btnCalRetry">再校准一次</button>
     </div>
+  </div>
+</div>
+
+<!-- 视线对齐 -->
+<div class="align-overlay" id="alignOverlay">
+  <div class="align-inner">
+    <span class="eyebrow">GAZE ALIGN</span>
+    <h2>看向屏幕中心的十字</h2>
+    <p>保持 2 秒，系统会把光标整体对齐到这里。</p>
+    <div class="align-cross"><span></span></div>
+    <b id="alignCount">3</b>
+    <div><button class="btn ghost sm" id="alignCancel">取消</button></div>
   </div>
 </div>
 

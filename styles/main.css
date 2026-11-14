@@ -727,6 +727,34 @@ input[type="range"]::-webkit-slider-thumb {
 .cal-result .metric-row b { display: block; font-size: 26px; font-family: var(--mono); color: var(--accent); }
 .cal-result .metric-row span { font-size: 10px; color: #7d8ea8; letter-spacing: .08em; }
 
+/* ===================== align ===================== */
+
+.align-overlay {
+  position: fixed; inset: 0; z-index: 9300; display: none;
+  place-items: center; background: rgba(4, 7, 12, .88);
+  backdrop-filter: blur(8px); color: #e8effb;
+}
+.align-overlay.open { display: grid; animation: viewIn .25s var(--ease); }
+.align-inner { text-align: center; max-width: 420px; padding: 24px; }
+.align-inner h2 { font-size: 24px; margin: 8px 0 6px; }
+.align-inner p { color: #93a7c0; font-size: 12.5px; line-height: 1.7; }
+.align-inner b {
+  display: block; font-family: var(--mono); font-size: 46px; line-height: 1;
+  color: var(--accent); margin: 6px 0 12px;
+  text-shadow: 0 0 30px rgba(46, 230, 214, .45);
+}
+.align-cross { position: relative; width: 180px; height: 180px; margin: 20px auto 14px; }
+.align-cross::before, .align-cross::after { content: ""; position: absolute; background: rgba(46, 230, 214, .45); }
+.align-cross::before { left: 50%; top: 0; bottom: 0; width: 1px; }
+.align-cross::after { top: 50%; left: 0; right: 0; height: 1px; }
+.align-cross span {
+  position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px;
+  border: 2px solid var(--accent); border-radius: 50%;
+  box-shadow: 0 0 24px rgba(46, 230, 214, .55);
+  animation: calPulse2 1.6s var(--ease) infinite;
+}
+@keyframes calPulse2 { 50% { transform: scale(1.18); opacity: .7; } }
+
 /* ===================== break ===================== */
 
 .break-overlay {
