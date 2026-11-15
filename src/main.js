@@ -467,7 +467,9 @@ function islandPayload() {
   const isl = app.settings.island || {};
   const limit = (app.settings.breakMinutes || 20) * 60000;
   const left = Math.max(0, limit - (health.continuousMs || 0));
-  const a = health.alerts && health.alerts[0];
+  // 只把 90 秒内的告警显示在灵动岛上，避免历史提醒一直挂着
+  const latest = health.alerts && health.alerts[0];
+  const a = latest && Date.now() - (latest.ts || 0) < 90000 ? latest : null;
   const sec = app.sessionStart ? Math.floor((Date.now() - app.sessionStart) / 1000) : 0;
   return {
     enabled: !!isl.enabled,
