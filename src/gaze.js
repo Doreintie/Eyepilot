@@ -4,7 +4,7 @@
 
 import {
   OneEuroFilter, buildFeatureVector, fitRidge, predictRidge,
-  medianVector, clamp, mean, lerp,
+  medianVector, clamp, mean, lerp, FEATURE_VERSION, fitAffine1D,
 } from './core/math.js';
 import { pxToDegrees } from './core/health.js';
 
@@ -25,6 +25,8 @@ export class GazeTracker {
     this.lastGood = null;
     this.goodAt = 0;
     this.offset = { x: 0, y: 0 };
+    this.beyondSince = 0;
+    this.shown = null;
   }
 
   setSmooth(v) {
@@ -54,6 +56,8 @@ export class GazeTracker {
     this.rawBuf = [];
     this.lastGood = null;
     this.goodAt = 0;
+    this.beyondSince = 0;
+    this.shown = null;
   }
 
   update(frame) {
@@ -84,20 +88,38 @@ export class GazeTracker {
 
     const vec = buildFeatureVector(frame, this.model.degree || 1);
     const pred = predictRidge(this.model, vec);
-    const bias = this.model.bias || [0, 0];
-    const nx = pred[0] + bias[0];
-    const ny = pred[1] + bias[1];
 
-    // 三帧中值：先把单帧跳点（关键点抖动）挡掉
+    // 校准阶段拟合出的「一维仿射校正」：把预测值拉回真实屏幕坐标。
+    // 只有平移项（bias）时，靠近屏幕边缘的误差依然很大；带上增益 a 之后，
+    // “整体偏下”“越往下越偏”这两种情况能同时被纠正。
+    const calX = this.model.calX || { a: 1, b: 0 };
+    const calY = this.model.calY || { a: 1, b: 0 };
+    const legacy = this.model.bias || [0, 0];
+    let nx = this.model.calX ? calX.a * pred[0] + calX.b : pred[0] + legacy[0];
+    let ny = this.model.calY ? calY.a * pred[1] + calY.b : pred[1] + legacy[1];
+
+    // 五帧中值：先把单帧跳点（关键点抖动）挡掉；五帧的滞后约 2 帧，肉眼无感
     this.rawBuf.push([nx, ny]);
-    if (this.rawBuf.length > 3) this.rawBuf.shift();
+    if (this.rawBuf.length > 5) this.rawBuf.shift();
     const colX = this.rawBuf.map((p) => p[0]).sort((a, b) => a - b);
     const colY = this.rawBuf.map((p) => p[1]).sort((a, b) => a - b);
     const mx = colX[Math.floor(colX.length / 2)];
     const my = colY[Math.floor(colY.length / 2)];
 
-    const margin = 0.045;
-    const outside = mx < -margin || mx > 1 + margin || my < -margin || my > 1 + margin;
+    // 「视线离开屏幕」必须带迟滞：
+    // 原来只要越过 4.5% 就立刻判定，瞳孔抖一下、或用户在看屏幕最下沿，
+    // 就会不断弹出“视线已离开屏幕”。现在要求持续越界，且越界很多时才快速判定。
+    const marginIn = 0.06;
+    const marginHard = 0.22;
+    const beyond = mx < -marginIn || mx > 1 + marginIn || my < -marginIn || my > 1 + marginIn;
+    const farBeyond = mx < -marginHard || mx > 1 + marginHard || my < -marginHard || my > 1 + marginHard;
+    if (beyond) {
+      if (!this.beyondSince) this.beyondSince = now;
+    } else {
+      this.beyondSince = 0;
+    }
+    const held = this.beyondSince ? now - this.beyondSince : 0;
+    const outside = beyond && held > (farBeyond ? 220 : 800);
 
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -112,8 +134,8 @@ export class GazeTracker {
 
     const px = clamp(mx, 0, 1) * vw + this.offset.x;
     const py = clamp(my, 0, 1) * vh + this.offset.y;
-    const fx = clamp(this.fx.filter(clamp(px, 0, vw), dt), 0, vw);
-    const fy = clamp(this.fy.filter(clamp(py, 0, vh), dt), 0, vh);
+    let fx = clamp(this.fx.filter(clamp(px, 0, vw), dt), 0, vw);
+    let fy = clamp(this.fy.filter(clamp(py, 0, vh), dt), 0, vh);
 
     // 置信度：眼睛张得越小 / 特征越偏离校准分布，越低
     let conf = 1;
@@ -131,7 +153,19 @@ export class GazeTracker {
 
     const valid = conf > 0.28 && !outside;
 
+    // 死区：静止注视时人眼本身就有微颤，2px 以内的位移直接不输出，
+    // 这样“抽搐”在视觉上消失，而真实移动超过 2px 依然即时响应。
     if (valid) {
+      const dz = conf > 0.6 ? 2.2 : 4.2;
+      if (!this.shown) this.shown = { x: fx, y: fy };
+      const ddx = fx - this.shown.x;
+      const ddy = fy - this.shown.y;
+      if (ddx * ddx + ddy * ddy < dz * dz) {
+        fx = this.shown.x;
+        fy = this.shown.y;
+      } else {
+        this.shown = { x: fx, y: fy };
+      }
       this.lastGood = { x: fx, y: fy };
       this.goodAt = now;
     }
@@ -147,6 +181,9 @@ export class GazeTracker {
       ny: outY / vh,
       rawX: mx * vw,
       rawY: my * vh,
+      // 校正前的一手预测值：纵向三点微调用它重新拟合，避免在已校正的坐标上再校正
+      predX: pred[0],
+      predY: pred[1],
       valid,
       confidence: conf,
       outside,
@@ -189,7 +226,18 @@ export class Calibrator {
     this.collector.vecs.push(buildFeatureVector(frame, this.degree));
   }
 
-  /** 校准过程中的人脸位置/光线提示，帮助用户自己修正 */
+  /** 校准前根据点数改写标题、说明与距离提示，避免 16 点仍显示“九点校准” */
+  applyLabels(total) {
+    const cn = total >= 16 ? '十六点校准' : '九点校准';
+    const en = total >= 16 ? 'SIXTEEN-POINT CALIBRATION' : 'NINE-POINT CALIBRATION';
+    if (this.els.brand) this.els.brand.textContent = cn;
+    if (this.els.eyebrow) this.els.eyebrow.textContent = en;
+    if (this.els.introText) {
+      this.els.introText.innerHTML = `建议离屏幕 <b>50–65 cm</b>（约一臂），让脸占画面三分之一；依次注视出现的 ${total} 个圆点。`;
+    }
+  }
+
+  /** 校准过程中的人脸位置/光线/距离提示，帮助用户自己修正 */
   updateFaceStatus(frame) {
     const pill = this.els.facePill;
     if (!pill) return;
@@ -207,11 +255,16 @@ export class Calibrator {
       const box = frame.faceBox || { minX: 0, maxX: 0 };
       const ratio = (box.maxX - box.minX) / fw;
       const cx = (box.minX + box.maxX) / 2 / fw;
-      if (ratio < 0.17) { text = '离得有点远，靠近一些'; cls = 'warn'; }
+      const d = Math.round(frame.distanceCm || 0);
+
+      if (d > 0 && d < 38) { text = `太近了（约 ${d} cm），后退一些`; cls = 'warn'; }
+      else if (d > 88) { text = `有点远（约 ${d} cm），靠近一些`; cls = 'warn'; }
+      else if (ratio < 0.15) { text = '离得有点远，靠近一些'; cls = 'warn'; }
       else if (cx < 0.33) { text = '脸偏左，向右一点'; cls = 'warn'; }
       else if (cx > 0.67) { text = '脸偏右，向左一点'; cls = 'warn'; }
       else if (frame.lightLuma > 205) { text = '背景过亮，可能逆光'; cls = 'warn'; }
       else if (frame.lightLuma > 0 && frame.lightLuma < 42) { text = '光线偏暗'; cls = 'warn'; }
+      else if (d > 0) { text = `人脸正常 · 约 ${d} cm`; }
     }
     pill.className = `pill tiny cal-face ${cls}`;
     pill.innerHTML = `<i class="dot"></i>${text}`;
@@ -222,6 +275,7 @@ export class Calibrator {
     this.cancelled = false;
     this.points = points;
     this.degree = points >= 16 ? 2 : 1;
+    this.applyLabels(points);
     const { overlay, target, hint, progressBar, result, intro, countdown, resultMetrics, preview } = this.els;
     overlay.classList.add('open');
     result.classList.remove('show');
@@ -292,9 +346,9 @@ export class Calibrator {
     if (samples.length < Math.min(6, coords.length)) {
       this.showResult(
         '校准没完成',
-        `9 个点里只采集到 <b>${samples.length}</b> 个有效样本，不足以建立稳定的视线模型。<br><br>
+        `一共 ${coords.length} 个点，只采集到 <b>${samples.length}</b> 个有效样本，不足以建立稳定的视线模型。<br><br>
          常见原因：脸离摄像头太远、背后有亮窗（逆光）、校准时频繁低头或转头。<br>
-         建议把屏幕稍微转向光源，让脸占画面 1/3 左右，再试一次。`,
+         建议把屏幕稍微转向光源，离屏幕 50–65 cm，让脸占画面 1/3 左右，再试一次。`,
         null,
       );
       return;
@@ -304,33 +358,41 @@ export class Calibrator {
     const Y = samples.map((s) => s.target);
     const model = fitRidge(X, Y, this.degree >= 2 ? 1.2 : 0.9);
     model.degree = this.degree;
+    model.featureVersion = FEATURE_VERSION;
     model.createdAt = Date.now();
     model.points = samples.length;
     model.plannedPoints = points;
     model.screen = { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio || 1 };
     model.smooth = this.tracker.smooth;
 
-    // 用留出的验证点估计真实误差，并顺手校正系统性偏差
+    // 用留出的验证点估计真实误差，并拟合仿射校正（偏移 + 增益）
     const val = await this.validate(model);
+    model.calX = val.calX;
+    model.calY = val.calY;
     const avgErr = val.errsAfter.length ? mean(val.errsAfter) : 0;
     const before = val.errsBefore.length ? mean(val.errsBefore) : 0;
-    model.bias = val.bias;
     model.rmse = Math.round(avgErr);
     model.rmseBefore = Math.round(before);
-    model.biasPx = Math.round(Math.hypot(val.bias[0] * window.innerWidth, val.bias[1] * window.innerHeight));
+    model.biasPx = Math.round(Math.hypot((val.calX.b || 0) * window.innerWidth, (val.calY.b || 0) * window.innerHeight));
+    model.gainX = +val.calX.a.toFixed(2);
+    model.gainY = +val.calY.a.toFixed(2);
     model.validation = val.errsAfter.map((e) => Math.round(e));
     model.accuracyDeg = +pxToDegrees(avgErr, window.innerWidth, 34).toFixed(2);
 
-    const fixText = model.biasPx >= 6
+    const fixText = model.biasPx >= 8
       ? `已自动校正 <b>${model.biasPx} px</b> 的整体偏差。`
       : '';
     this.showResult(
       '校准完成',
-      `视线模型已保存。${fixText}如果光标仍然偏左或偏右，可以到「设置 → 视线微调」边看光标边推，直到对准为止。`,
+      `视线模型已保存。${fixText}如果光标仍然偏上或偏下，可以到「设置 → 视线微调」盯着屏幕中心十字 2 秒自动对齐。`,
       model,
     );
   }
 
+  /**
+   * 用 5 个留出点拟合每屏轴的仿射校正：target ≈ a · pred + b。
+   * 只有 b 时能纠“整体偏”；加上 a 之后还能纠“上准下偏”这类增益误差。
+   */
   async validate(model) {
     const candidates = [
       { x: 0.26, y: 0.28 }, { x: 0.74, y: 0.32 },
@@ -338,7 +400,7 @@ export class Calibrator {
     ];
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const samples = [];
+    const pairs = [];
     for (const pt of candidates) {
       if (this.cancelled) break;
       this.showTarget(pt);
@@ -347,16 +409,18 @@ export class Calibrator {
       const vec = await this.collect(700);
       if (!vec) continue;
       const p = predictRidge(model, vec);
-      samples.push({ dx: pt.x - p[0], dy: pt.y - p[1] });
+      pairs.push({ px: p[0], py: p[1], tx: pt.x, ty: pt.y });
     }
     this.els.target.classList.remove('show');
 
-    const bias = samples.length
-      ? [clamp(mean(samples.map((s) => s.dx)), -0.1, 0.1), clamp(mean(samples.map((s) => s.dy)), -0.1, 0.1)]
-      : [0, 0];
-    const errsBefore = samples.map((s) => Math.hypot(s.dx * w, s.dy * h));
-    const errsAfter = samples.map((s) => Math.hypot((s.dx - bias[0]) * w, (s.dy - bias[1]) * h));
-    return { bias, errsBefore, errsAfter };
+    const calX = fitAffine1D(pairs.map((p) => p.px), pairs.map((p) => p.tx));
+    const calY = fitAffine1D(pairs.map((p) => p.py), pairs.map((p) => p.ty));
+    const errsBefore = pairs.map((p) => Math.hypot((p.tx - p.px) * w, (p.ty - p.py) * h));
+    const errsAfter = pairs.map((p) => Math.hypot(
+      (p.tx - (calX.a * p.px + calX.b)) * w,
+      (p.ty - (calY.a * p.py + calY.b)) * h,
+    ));
+    return { calX, calY, errsBefore, errsAfter };
   }
 
   showTarget(pt) {
@@ -395,10 +459,10 @@ export class Calibrator {
     if (this.els.preview) this.els.preview.classList.toggle('hidden', !!model);
     if (resultMetrics) {
       resultMetrics.innerHTML = model ? `
-        <div><b>${model.rmse || '--'}</b><span>平均误差 PX</span></div>
-        <div><b>${model.accuracyDeg || '--'}°</b><span>视角误差</span></div>
+        <div><b>${model.rmse ?? '--'}</b><span>平均误差 PX</span></div>
+        <div><b>${model.accuracyDeg ?? '--'}°</b><span>视角误差</span></div>
         <div><b>${model.points || 9}</b><span>校准点</span></div>
-        <div><b>${Math.round(model.smooth || 0)}</b><span>平滑强度</span></div>` : '';
+        <div><b>${model.gainX && model.gainY ? `${model.gainX} / ${model.gainY}` : '--'}</b><span>横 / 纵增益</span></div>` : '';
     }
     result.classList.add('show');
     this.active = false;

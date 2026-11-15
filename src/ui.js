@@ -39,9 +39,10 @@ const ids = [
   'setSound', 'setFatigue', 'valFatigue', 'setBreak', 'valBreak', 'storageInfo', 'btnWipe',
   'calibration', 'calStage', 'calTarget', 'calHint', 'calProgressBar', 'calResult',
   'calResultTitle', 'calResultText', 'calResultMetrics', 'calIntro', 'calCountdown',
+  'calBrand', 'calEyebrow', 'calIntroText',
   'calPreview', 'calFace', 'calClose', 'btnCalFinish', 'btnCalRetry',
   'breakOverlay', 'breakCount', 'breakTrackBar', 'btnBreakDone', 'btnBreakSkip', 'breakFine',
-  'alignOverlay', 'alignCount', 'alignCancel',
+  'alignOverlay', 'alignCount', 'alignCancel', 'alignTitle', 'alignHint', 'alignTarget',
 ];
 
 export const ui = {
@@ -472,6 +473,9 @@ export function calibrationEls() {
     facePill: E.calFace,
     intro: E.calIntro,
     countdown: E.calCountdown,
+    brand: E.calBrand,
+    eyebrow: E.calEyebrow,
+    introText: E.calIntroText,
     btnFinish: E.btnCalFinish,
     btnRetry: E.btnCalRetry,
   };
@@ -479,38 +483,87 @@ export function calibrationEls() {
 
 /* ---------------- 视线对齐 ---------------- */
 
+const ALIGN_STEPS = [
+  { y: 0.5, name: '屏幕中心' },
+  { y: 0.16, name: '屏幕上方' },
+  { y: 0.84, name: '屏幕下方' },
+];
+const ALIGN_SETTLE_MS = 750;
+const ALIGN_SAMPLE_MS = 900;
+
+let alignRun = 0;
 let alignTimer = 0;
 
-export function startAlign() {
+/**
+ * 纵向三点微调：中心 → 上方 → 下方。
+ * 三个点能同时解出「偏移」和「增益」，所以“上准下偏 / 整体偏下”都能被修正；
+ * 只做一次归中只能纠偏移，增益误差会一直在。
+ */
+export async function startAlign() {
   if (!E.alignOverlay) return;
+  if (!app.model) {
+    toast('还没有校准', '先点「启动相机」完成一次校准，再做三点微调', 'warn', 4000);
+    return;
+  }
+  clearTimeout(alignTimer);
+  const run = ++alignRun;
   E.alignOverlay.classList.add('open');
-  clearInterval(alignTimer);
-  let n = 3;
-  E.alignCount.textContent = String(n);
-  alignTimer = setInterval(() => {
-    n--;
-    if (n > 0) {
+  if (E.alignTitle) E.alignTitle.textContent = '盯住十字，保持 2 秒';
+
+  const pairs = [];
+  for (let i = 0; i < ALIGN_STEPS.length; i++) {
+    const step = ALIGN_STEPS[i];
+    if (run !== alignRun) return;
+    E.alignOverlay.style.setProperty('--align-y', `${step.y * 100}%`);
+    if (E.alignHint) E.alignHint.textContent = `第 ${i + 1} / ${ALIGN_STEPS.length} 点 · ${step.name}`;
+
+    // 倒计时：3 → 1，正好覆盖「移动视线 + 稳定」
+    for (let n = 3; n > 0; n--) {
+      if (run !== alignRun) return;
       E.alignCount.textContent = String(n);
-      return;
+      await new Promise((r) => { alignTimer = setTimeout(r, (ALIGN_SETTLE_MS + ALIGN_SAMPLE_MS) / 3); });
     }
-    clearInterval(alignTimer);
-    E.alignOverlay.classList.remove('open');
-    const g = app.gaze;
-    if (!g || !g.valid) {
-      toast('视线还没稳定', '等光标停稳后再试一次，或先做一次校准', 'warn', 4000);
-      return;
+
+    // 采样这段时间里的预测值中位数，避免用单帧
+    const sx = [];
+    const sy = [];
+    const until = performance.now() + 320;
+    while (performance.now() < until) {
+      if (run !== alignRun) return;
+      const g = app.gaze;
+      if (g && g.valid && Number.isFinite(g.predY)) { sx.push(g.predX); sy.push(g.predY); }
+      await new Promise((r) => setTimeout(r, 40));
     }
-    actions.applyCenterOffset && actions.applyCenterOffset({ x: g.x, y: g.y });
-  }, 800);
+    if (sy.length >= 3) {
+      const mid = (arr) => arr.slice().sort((a, b) => a - b)[Math.floor(arr.length / 2)];
+      pairs.push({ predY: mid(sy), targetY: step.y, predX: mid(sx) });
+    }
+  }
+
+  if (run !== alignRun) return;
+  E.alignOverlay.classList.remove('open');
+  if (pairs.length < 2) {
+    toast('没采到有效视线', '确保脸在画面中、能正常眨眼，再试一次', 'warn', 4000);
+    return;
+  }
+  actions.applyVerticalRefine && actions.applyVerticalRefine(pairs);
 }
 
 function bindAlign() {
   if (E.alignCancel) {
     E.alignCancel.addEventListener('click', () => {
-      clearInterval(alignTimer);
+      alignRun++;
+      clearTimeout(alignTimer);
       E.alignOverlay.classList.remove('open');
     });
   }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && E.alignOverlay && E.alignOverlay.classList.contains('open')) {
+      alignRun++;
+      clearTimeout(alignTimer);
+      E.alignOverlay.classList.remove('open');
+    }
+  });
 }
 
 /* ---------------- 远眺 ---------------- */

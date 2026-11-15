@@ -1,6 +1,7 @@
 /* 纯算法层单测：node tools/test-core.mjs */
 import {
   fitRidge, predictRidge, buildFeatureVector, OneEuroFilter, medianVector, linearTrend, clamp,
+  fitAffine1D, FEATURE_VERSION, featureDim,
 } from '../src/core/math.js';
 import {
   computePerclos, computeBlinkRate, computeBlinkStats, computeFocus, computeFatigue,
@@ -38,12 +39,29 @@ console.log('\n[1] 岭回归：恢复已知线性映射');
 
 console.log('\n[2] 特征向量');
 {
-  const f = { lx: 0.4, ly: 0.6, rx: 0.45, ry: 0.55, yaw: 0.02, pitch: 0.01 };
+  const f = { hxL: 0.1, hyL: 0.06, hxR: 0.08, hyR: 0.04, yaw: 0.02, pitch: 0.01 };
   const v1 = buildFeatureVector(f, 1);
   const v2 = buildFeatureVector(f, 2);
-  ok('一阶特征 8 维', v1.length === 8, `got ${v1.length}`);
-  ok('二阶特征 12 维', v2.length === 12, `got ${v2.length}`);
-  ok('平均值特征正确', close(v1[4], 0.425, 1e-9));
+  ok('特征版本为 2', FEATURE_VERSION === 2);
+  ok('一阶特征 6 维', v1.length === 6 && featureDim(1) === 6, `got ${v1.length}`);
+  ok('二阶特征 10 维', v2.length === 10 && featureDim(2) === 10, `got ${v2.length}`);
+  ok('平均横向特征', close(v1[0], 0.09, 1e-9));
+  ok('平均纵向特征', close(v1[1], 0.05, 1e-9));
+  ok('左右收敛差', close(v1[2], 0.02, 1e-9));
+  ok('缺失字段回落到 0', buildFeatureVector({}, 1).every((v) => v === 0));
+}
+
+console.log('\n[2b] 仿射校正（校准残余误差）');
+{
+  const xs = [0.1, 0.3, 0.5, 0.7, 0.9];
+  const ys = xs.map((x) => 1.12 * x - 0.04);
+  const r = fitAffine1D(xs, ys);
+  ok('恢复已知增益', close(r.a, 1.12, 1e-6), `a=${r.a}`);
+  ok('恢复已知偏移', close(r.b, -0.04, 1e-6), `b=${r.b}`);
+  const bad = fitAffine1D([0, 0.5, 1], [0.4, 4, 0.6]);
+  ok('增益被夹紧在安全范围', bad.a >= 0.55 && bad.a <= 1.8, `a=${bad.a}`);
+  ok('偏移被夹紧在安全范围', Math.abs(bad.b) <= 0.35, `b=${bad.b}`);
+  ok('点数不足时不做校正', fitAffine1D([0, 1], [0, 1]).a === 1);
 }
 
 console.log('\n[3] 一欧元滤波');

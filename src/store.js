@@ -3,6 +3,7 @@
    ============================================================ */
 
 import { storage } from './utils.js';
+import { FEATURE_VERSION, featureDim } from './core/math.js';
 
 export const DEFAULT_SETTINGS = {
   cameraId: '',
@@ -49,7 +50,16 @@ export function mergeSettings(raw) {
 
 export function initStore() {
   app.settings = mergeSettings(storage.get('settings', {}));
-  app.model = storage.get('calibration', null);
+  const raw = storage.get('calibration', null);
+  // 特征算法升级后旧模型不再适用（维度/语义都变了），必须丢弃并要求重新校准，
+  // 否则会用 8 维权重去读 6 维特征，直接算出 NaN。
+  const usable = raw
+    && raw.featureVersion === FEATURE_VERSION
+    && Array.isArray(raw.w)
+    && raw.d === featureDim(raw.degree || 1);
+  app.model = usable ? raw : null;
+  app.modelDropped = !!raw && !usable;
+  if (raw && !usable) storage.remove('calibration');
   const b = storage.get('baseline', null);
   if (b && b.blink) app.baseline = b;
   document.documentElement.dataset.theme = app.settings.theme === 'light' ? 'light' : 'dark';

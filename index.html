@@ -487,12 +487,12 @@
 
         <div class="card">
           <div class="card-head"><h3>视线微调</h3><span class="pill tiny" id="offsetPill">偏移 0 , 0 px</span></div>
-          <p class="body-text">如果光标整体偏左或偏右：点「看向屏幕中心归中」，然后盯着十字看 2 秒，系统会自动对齐。也可以用方向键微调。</p>
+          <p class="body-text">光标整体偏上、偏下，或者「屏幕中间准、往下就越偏」：点「三点纵向校准」，依次盯住中心 / 上方 / 下方针 2 秒。左右偏差可以用方向键微调。</p>
           <div class="nudge">
             <button class="btn ghost" data-offset="up" data-gaze>↑</button>
             <div class="nudge-row">
               <button class="btn ghost" data-offset="left" data-gaze>←</button>
-              <button class="btn primary sm" id="btnCenterOffset" data-gaze>看向屏幕中心归中</button>
+              <button class="btn primary sm" id="btnCenterOffset" data-gaze>三点纵向校准</button>
               <button class="btn ghost" data-offset="right" data-gaze>→</button>
             </div>
             <button class="btn ghost" data-offset="down" data-gaze>↓</button>
@@ -515,7 +515,7 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.0.0</span></div>
+          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.0.1</span></div>
           <p class="body-text">EyePilot · 瞳行，校园黑客松参赛作品。技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移特征 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件，普通笔记本摄像头即可运行。</p>
           <p class="fine">本作品不构成医疗建议。若持续眼干、眼痛或视力模糊，请就医。</p>
         </div>
@@ -537,7 +537,7 @@
 <!-- 校准覆盖层 -->
 <div class="cal-overlay" id="calibration">
   <div class="cal-top">
-    <div class="cal-brand"><span class="brand-mark small"><svg viewBox="0 0 32 32" fill="none"><ellipse cx="16" cy="16" rx="11.5" ry="7" stroke="currentColor" stroke-width="1.8"/><circle cx="16" cy="16" r="3.6" fill="currentColor"/></svg></span> 九点校准</div>
+    <div class="cal-brand"><span class="brand-mark small"><svg viewBox="0 0 32 32" fill="none"><ellipse cx="16" cy="16" rx="11.5" ry="7" stroke="currentColor" stroke-width="1.8"/><circle cx="16" cy="16" r="3.6" fill="currentColor"/></svg></span> <span id="calBrand">九点校准</span></div>
     <div class="cal-progress"><i id="calProgressBar"></i></div>
     <span class="pill tiny cal-face" id="calFace"><i class="dot"></i>人脸检测中</span>
     <button class="btn ghost sm" id="calClose">退出 (Esc)</button>
@@ -547,9 +547,9 @@
       <span class="cal-ring"></span><span class="cal-ring r2"></span><span class="cal-dot"></span>
     </div>
     <div class="cal-intro" id="calIntro">
-      <span class="eyebrow">NINE-POINT CALIBRATION</span>
+      <span class="eyebrow" id="calEyebrow">NINE-POINT CALIBRATION</span>
       <b id="calCountdown">3</b>
-      <p>让脸保持在画面中央，坐姿放松，依次注视出现的 9 个圆点。</p>
+      <p id="calIntroText">建议离屏幕 <b>50–65 cm</b>（约一臂），让脸占画面三分之一；依次注视出现的 9 个圆点。</p>
     </div>
     <div class="cal-preview">
       <video id="calPreview" playsinline muted autoplay></video>
@@ -570,14 +570,14 @@
 
 <!-- 视线对齐 -->
 <div class="align-overlay" id="alignOverlay">
-  <div class="align-inner">
-    <span class="eyebrow">GAZE ALIGN</span>
-    <h2>看向屏幕中心的十字</h2>
-    <p>保持 2 秒，系统会把光标整体对齐到这里。</p>
-    <div class="align-cross"><span></span></div>
-    <b id="alignCount">3</b>
-    <div><button class="btn ghost sm" id="alignCancel">取消</button></div>
+  <div class="align-head">
+    <span class="eyebrow">GAZE ALIGN · 3 POINTS</span>
+    <h2 id="alignTitle">盯住十字，保持 2 秒</h2>
+    <p id="alignHint">第 1 / 3 点 · 屏幕中心</p>
   </div>
+  <div class="align-target" id="alignTarget"><i></i><i class="r2"></i></div>
+  <b class="align-count" id="alignCount">3</b>
+  <button class="btn ghost sm align-cancel" id="alignCancel">取消</button>
 </div>
 
 <!-- 远眺休息 -->

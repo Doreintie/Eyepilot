@@ -128,6 +128,28 @@ export function predictRidge(model, x) {
   return out;
 }
 
+/**
+ * 一维仿射最小二乘：y ≈ a·x + b。
+ * 校准的留出点用它修正残余的「整体偏移 (b)」与「增益误差 (a)」，
+ * 例如“越往下越偏下”就是 a 偏离 1。
+ * 结果夹紧，避免个别坏点把曲线拉飞。
+ */
+export function fitAffine1D(xs, ys, { aMin = 0.55, aMax = 1.8, bLimit = 0.35 } = {}) {
+  const n = Math.min(xs.length, ys.length);
+  if (n < 3) return { a: 1, b: 0, n: Math.max(0, n) };
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (let i = 0; i < n; i++) {
+    sx += xs[i]; sy += ys[i]; sxx += xs[i] * xs[i]; sxy += xs[i] * ys[i];
+  }
+  const den = n * sxx - sx * sx;
+  let a = Math.abs(den) < 1e-9 ? 1 : (n * sxy - sx * sy) / den;
+  let b = (sy - a * sx) / n;
+  if (!Number.isFinite(a) || !Number.isFinite(b)) { a = 1; b = 0; }
+  a = clamp(a, aMin, aMax);
+  b = clamp(b, -bLimit, bLimit);
+  return { a, b, n };
+}
+
 export const serializeModel = (m) => ({
   w: m.w, mu: m.mu, sd: m.sd, lambda: m.lambda, d: m.d,
   degree: m.degree, rmse: m.rmse, createdAt: m.createdAt,
@@ -138,17 +160,44 @@ export const deserializeModel = (o) => (o && Array.isArray(o.w) ? { ...o } : nul
 /* ---------------- 眼动特征 ---------------- */
 
 /**
- * 把一帧的人脸几何描述转成回归特征向量。
- * 约定：lx/ly 为「鼻侧→颞侧」「上眼睑→下眼睑」的虹膜相对位置（0..1）。
+ * 特征版本。改动 buildFeatureVector 的维度或语义时必须 +1，
+ * 旧校准模型会因维度不符被自动丢弃并要求重新校准。
+ */
+export const FEATURE_VERSION = 2;
+
+/** 特征维度（用于校验旧模型） */
+export function featureDim(degree = 1) {
+  return degree >= 2 ? 10 : 6;
+}
+
+const num = (v, fallback = 0) => (Number.isFinite(v) ? v : fallback);
+
+/**
+ * 把一帧的人脸几何描述转成回归特征向量（v2）。
+ *
+ * v1 用的是「虹膜在眼框内的比例」，眼框高度只有 ~20px，1px 关键点抖动
+ * 就是 5% 特征变化，且上眼睑会跟着视线一起动，导致垂直方向既抖又偏。
+ * v2 改为「虹膜相对内外眼角连线中点，以眼宽为单位」：
+ *   hx/ hy  双眼平均的水平/垂直位置（无量纲，跨距离、跨脸型稳定）
+ *   vx/ vy  左右眼差值（收敛角），帮助区分远近与轻微头转
+ * 特征从 8 维降到 6 维，去掉 lx/rx 这类高度共线的冗余项，回归矩阵条件数显著变好。
  */
 export function buildFeatureVector(feat, degree = 1) {
-  const { lx = 0.5, ly = 0.5, rx = 0.5, ry = 0.5 } = feat || {};
-  const ax = (lx + rx) / 2;
-  const ay = (ly + ry) / 2;
-  const yaw = (feat && feat.yaw) || 0;
-  const pitch = (feat && feat.pitch) || 0;
-  const v = [lx, ly, rx, ry, ax, ay, yaw, pitch];
-  if (degree >= 2) v.push(ax * ax, ay * ay, ax * ay, Math.abs(lx - rx));
+  const f = feat || {};
+  const hxL = num(f.hxL);
+  const hyL = num(f.hyL);
+  const hxR = num(f.hxR);
+  const hyR = num(f.hyR);
+
+  const hx = (hxL + hxR) / 2;
+  const hy = (hyL + hyR) / 2;
+  const vx = hxL - hxR;
+  const vy = hyL - hyR;
+  const yaw = num(f.yaw);
+  const pitch = num(f.pitch);
+
+  const v = [hx, hy, vx, vy, yaw, pitch];
+  if (degree >= 2) v.push(hx * hx, hy * hy, hx * hy, vy * vy);
   return v;
 }
 

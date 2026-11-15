@@ -12,10 +12,15 @@ const WASM_PATH = './vendor/mediapipe/wasm';
 /* MediaPipe 478 点面部网格关键索引 */
 export const MESH = {
   faceOval: [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109],
-  eyeLeft: [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246],
-  eyeRight: [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466],
+  // 顺序必须是「外眼角 → 下睑 → 内眼角 → 上睑 → 外眼角」的闭环，
+  // 否则描出来的多边形会自交，看上去是几个小菱形而不是眼睛。
+  eyeLeft: [33, 7, 163, 144, 145, 153, 154, 155, 133, 246, 161, 160, 159, 158, 157, 173],
+  eyeRight: [263, 249, 390, 373, 374, 380, 381, 382, 362, 466, 388, 387, 386, 385, 384, 398],
   irisA: [468, 469, 470, 471, 472],
   irisB: [473, 474, 475, 476, 477],
+  // 内外眼角：用来建立不随眼睑开合变化的坐标系
+  canthusL: { outer: 33, inner: 133 },
+  canthusR: { outer: 263, inner: 362 },
   noseTip: 1,
   chin: 152,
 };
@@ -59,10 +64,21 @@ export function analyzeFace(result, width, height) {
   const irisOfL = irisNearL ? irisA : irisB;
   const irisOfR = irisNearL ? irisB : irisA;
 
-  const hRatioL = boxL.w > 1 ? clamp((boxL.maxX - irisOfL.x) / boxL.w, -0.4, 1.4) : 0.5;
-  const vRatioL = boxL.h > 1 ? clamp((irisOfL.y - boxL.minY) / boxL.h, -0.4, 1.4) : 0.5;
-  const hRatioR = boxR.w > 1 ? clamp((irisOfR.x - boxR.minX) / boxR.w, -0.4, 1.4) : 0.5;
-  const vRatioR = boxR.h > 1 ? clamp((irisOfR.y - boxR.minY) / boxR.h, -0.4, 1.4) : 0.5;
+  // 用「内外眼角连线中点」建坐标系：眼角位置不随眼睑开合变化，
+  // 虹膜相对它的位移不会像「眼框内比例」那样被眨眼和眼睑带动着跳。
+  const canL = { o: P(MESH.canthusL.outer), i: P(MESH.canthusL.inner) };
+  const canR = { o: P(MESH.canthusR.outer), i: P(MESH.canthusR.inner) };
+  const midL = { x: (canL.o.x + canL.i.x) / 2, y: (canL.o.y + canL.i.y) / 2 };
+  const midR = { x: (canR.o.x + canR.i.x) / 2, y: (canR.o.y + canR.i.y) / 2 };
+  const wL = Math.max(1, dist(canL.o, canL.i));
+  const wR = Math.max(1, dist(canR.o, canR.i));
+  // 两眼共用同一尺度：头转动时“近眼变大”不会被误当成视线位移
+  const eyeScale = Math.max(1, (wL + wR) / 2);
+
+  const hxL = clamp((irisOfL.x - midL.x) / eyeScale, -0.55, 0.55);
+  const hyL = clamp((irisOfL.y - midL.y) / eyeScale, -0.55, 0.55);
+  const hxR = clamp((irisOfR.x - midR.x) / eyeScale, -0.55, 0.55);
+  const hyR = clamp((irisOfR.y - midR.y) / eyeScale, -0.55, 0.55);
 
   const blendshapes = {};
   const cats = result.faceBlendshapes && result.faceBlendshapes[0] ? result.faceBlendshapes[0].categories : [];
@@ -105,10 +121,11 @@ export function analyzeFace(result, width, height) {
     present: true,
     frameWidth: width,
     frameHeight: height,
-    lx: hRatioL,
-    ly: vRatioL,
-    rx: hRatioR,
-    ry: vRatioR,
+    hxL,
+    hyL,
+    hxR,
+    hyR,
+    eyeScale,
     yaw: yawN,
     pitch: pitchN + (chinN - 2.5) * 0.06,
     yawDeg: Math.round(yawN * 46),
@@ -288,25 +305,49 @@ export class VisionEngine {
   }
 
   renderOverlay(frame) {
-    const ctx = this.overlay ? this.overlay.getContext('2d') : null;
+    if (!this.overlay) return;
+    const ctx = this.overlay.getContext('2d');
     if (!ctx) return;
-    const w = this.overlay.width, h = this.overlay.height;
-    if (w < 64 || h < 64) return;
-    ctx.clearRect(0, 0, w, h);
+
+    const vw = this.video.videoWidth || 960;
+    const vh = this.video.videoHeight || 720;
+    const rect = this.overlay.getBoundingClientRect();
+    const bw = Math.max(1, Math.round(rect.width || this.overlay.clientWidth || vw));
+    const bh = Math.max(1, Math.round(rect.height || this.overlay.clientHeight || vh));
+    if (bw < 32 || bh < 32) return;
+
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const needW = Math.round(bw * dpr);
+    const needH = Math.round(bh * dpr);
+    if (this.overlay.width !== needW || this.overlay.height !== needH) {
+      this.overlay.width = needW;
+      this.overlay.height = needH;
+    }
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.overlay.width, this.overlay.height);
     if (!frame || !frame.present || !this.showMesh) return;
 
-    const s = Math.max(w, h) / 720;
+    // 关键：视频用 object-fit: cover 显示，画布必须用同一套「等比铺满 + 居中裁切」变换，
+    // 否则关键点会被横向拉伸（之前“标注的眼睛和真实位置不重合”就是这个原因）。
+    const scale = Math.max(bw / vw, bh / vh);
+    const ox = (bw - vw * scale) / 2;
+    const oy = (bh - vh * scale) / 2;
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+
+    // 下面全部直接用「视频像素」作图；线宽换算回约 1.2 CSS px
+    const px = 1 / scale;
 
     // 面部轮廓
     ctx.beginPath();
     MESH.faceOval.forEach((i, idx) => {
       const p = frame.landmarks[i];
-      const x = p.x * w, y = p.y * h;
+      const x = p.x * vw, y = p.y * vh;
       if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
     ctx.closePath();
     ctx.strokeStyle = 'rgba(46, 230, 214, .28)';
-    ctx.lineWidth = 1.2 * s;
+    ctx.lineWidth = 1.2 * px;
     ctx.stroke();
 
     // 眼框
@@ -315,20 +356,24 @@ export class VisionEngine {
       contour.forEach((p, idx) => (idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
       ctx.closePath();
       ctx.strokeStyle = 'rgba(46, 230, 214, .85)';
-      ctx.lineWidth = 1.4 * s;
+      ctx.lineWidth = 1.4 * px;
       ctx.stroke();
     }
 
     // 虹膜
-    for (const iris of [frame.irisL, frame.irisR]) {
+    const irisPairs = [
+      [frame.irisL, frame.boxL],
+      [frame.irisR, frame.boxR],
+    ];
+    for (const [iris, box] of irisPairs) {
       if (!iris) continue;
-      const r = Math.max(3.4, (frame.boxL.w || 40) * 0.16) * s;
+      const r = Math.max(4, (box && box.w ? box.w : 40) * 0.17);
       ctx.beginPath();
       ctx.arc(iris.x, iris.y, r, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(124, 156, 255, .35)';
       ctx.fill();
       ctx.strokeStyle = 'rgba(180, 205, 255, .95)';
-      ctx.lineWidth = 1.2 * s;
+      ctx.lineWidth = 1.2 * px;
       ctx.stroke();
     }
 
@@ -336,10 +381,10 @@ export class VisionEngine {
     const nose = frame.landmarks[MESH.noseTip];
     ctx.beginPath();
     ctx.moveTo(frame.eyeMid.x, frame.eyeMid.y);
-    ctx.lineTo(nose.x * w, nose.y * h);
+    ctx.lineTo(nose.x * vw, nose.y * vh);
     ctx.strokeStyle = 'rgba(124, 156, 255, .35)';
-    ctx.lineWidth = 1 * s;
-    ctx.setLineDash([4 * s, 4 * s]);
+    ctx.lineWidth = 1 * px;
+    ctx.setLineDash([4 * px, 4 * px]);
     ctx.stroke();
     ctx.setLineDash([]);
   }

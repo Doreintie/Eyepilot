@@ -15,6 +15,7 @@ import { HealthMonitor } from './health-monitor.js';
 import { AICoach, buildReport, assessLocal } from './ai.js';
 import { pluginHost, renderPluginGrid, closePanel, openPlugin } from './plugins.js';
 import { download } from './utils.js';
+import { fitAffine1D } from './core/math.js';
 import { DemoEngine, seedDemoData } from './demo.js';
 
 import './plugins/reader.js';
@@ -320,14 +321,24 @@ const actions = {
     ui.updateOffsetUI();
   },
   centerOffset: () => ui.startAlign(),
-  applyCenterOffset: (g) => {
-    const s = app.settings;
-    const nx = Math.max(-300, Math.min(300, (s.offsetX || 0) + (window.innerWidth / 2 - g.x)));
-    const ny = Math.max(-300, Math.min(300, (s.offsetY || 0) + (window.innerHeight / 2 - g.y)));
-    saveSettings({ offsetX: nx, offsetY: ny });
-    tracker.setOffset(nx, ny);
-    ui.updateOffsetUI();
-    notifyAlert({ level: 'good', title: '已对齐', detail: `偏移设为 ${Math.round(nx)} , ${Math.round(ny)} px。看看光标是否和视线重合。` });
+  /**
+   * 纵向三点微调：pairs 是 [{predY, targetY}]，用仿射拟合同时修偏移与增益。
+   * 直接改 model.calY 并落盘，不动用户手动的 offset，两者互不干扰。
+   */
+  applyVerticalRefine: (pairs) => {
+    const m = app.model;
+    if (!m || !pairs || pairs.length < 2) return;
+    const fit = fitAffine1D(pairs.map((p) => p.predY), pairs.map((p) => p.targetY));
+    m.calY = { a: fit.a, b: fit.b };
+    persistModel(m);
+    tracker.model = m;
+    tracker.reset();
+    const px = Math.round(fit.b * window.innerHeight);
+    notifyAlert({
+      level: 'good',
+      title: '纵向已对齐',
+      detail: `增益 ${fit.a.toFixed(2)}、偏移 ${px > 0 ? '+' : ''}${px} px。现在看屏幕上下沿，光标应该都在视线附近。`,
+    });
   },
   resetOffset: () => {
     saveSettings({ offsetX: 0, offsetY: 0 });
@@ -401,6 +412,15 @@ function boot() {
   renderPluginGrid(document.getElementById('pluginGrid'));
   ui.renderAssessment(assessLocal(health.metrics, { series: health.series }));
   updateBreakRing(health);
+
+  if (app.modelDropped) {
+    setStatus('cal', 'warn', '需重新校准');
+    setTimeout(() => notifyAlert({
+      level: 'warn',
+      title: '视线算法已升级',
+      detail: 'v1.0.1 换了更稳的眼动特征，旧校准数据不再适用。请点「启动相机」后重新做一次校准。',
+    }), 1500);
+  }
 
   if (app.model) {
     tracker.setModel(app.model);
