@@ -42,7 +42,7 @@ AI 眼动交互 + 用眼健康监测的桌面 Web 应用。不需要 Tobii 之�
 | 体积 | 约 148 MB（自带 Chromium） | 约 21 MB（用系统浏览器） |
 | 适合 | 答辩现场、自己电脑 | 微信/QQ 传给别人、快速体验 |
 
-两个包都在项目外层目录：`EyePilot-Desktop-v1.0-win64.zip` / `EyePilot-Demo-v1.0-win64.zip`。
+两个包都在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 里：`EyePilot-Desktop-v1.0.0-win64.zip` / `EyePilot-Demo-v1.0-win64.zip`。
 
 **网页版**自带官方 Python 便携运行时（`runtime/`），收件人不需要安装 Python；系统里已有 Python 也会自动复用。
 
@@ -244,9 +244,9 @@ eyepilot/
 
 ## 发给别人 / 提交作品
 
-项目外层有两个包，按对方情况选一个发：
+两个打包产物体积超过 Git 仓库的常规范围，不随源码提交，放在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 附件里。按对方情况选一个发：
 
-**1. 桌面版 `EyePilot-Desktop-v1.0-win64.zip`（约 148 MB）**
+**1. 桌面版 `EyePilot-Desktop-v1.0.0-win64.zip`（约 148 MB）**
 
 - 解压后双击 `EyePilot.exe`，独立窗口运行，看不到浏览器地址栏。
 - 摄像头权限由应用自己处理，不会弹浏览器的权限框。
@@ -275,7 +275,7 @@ eyepilot/
 python serve.py
 ```
 
-需要“解压即用”的免安装包，请用项目外层的 `EyePilot-Demo-v1.0-win64.zip` 或 Release 附件。
+需要“解压即用”的免安装包，请到 [Releases](https://github.com/Doreintie/Eyepilot/releases) 下载 `EyePilot-Demo-v1.0-win64.zip`。
 
 ---
 
