@@ -487,19 +487,54 @@
 
         <div class="card">
           <div class="card-head"><h3>视线微调</h3><span class="pill tiny" id="offsetPill">偏移 0 , 0 px</span></div>
-          <p class="body-text">光标整体偏上、偏下，或者「屏幕中间准、往下就越偏」：点「三点纵向校准」，依次盯住中心 / 上方 / 下方针 2 秒。左右偏差可以用方向键微调。</p>
+          <p class="body-text">光标整体偏上/偏下、或「越往右越偏」：点「五点精细对齐」，依次盯住中心 / 上 / 下 / 左 / 右各 2 秒，横纵两轴的偏移与增益会一起重算。小范围偏差也可以用方向键推。</p>
           <div class="nudge">
             <button class="btn ghost" data-offset="up" data-gaze>↑</button>
             <div class="nudge-row">
               <button class="btn ghost" data-offset="left" data-gaze>←</button>
-              <button class="btn primary sm" id="btnCenterOffset" data-gaze>三点纵向校准</button>
+              <button class="btn primary sm" id="btnCenterOffset" data-gaze>五点精细对齐</button>
               <button class="btn ghost" data-offset="right" data-gaze>→</button>
             </div>
             <button class="btn ghost" data-offset="down" data-gaze>↓</button>
           </div>
           <div class="row-between">
-            <span class="fine">每次 8px，偏移保存在本机。</span>
+            <span class="fine">每次 12px，偏移保存在本机。</span>
             <button class="btn link sm" id="btnResetOffset">重置偏移</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>使用中自校准</h3><span class="pill tiny" id="autoPill">0 次 · 0 , 0 px</span></div>
+          <p class="body-text">你每用眼睛点中一个按钮，程序就获得一个“大致落点已知”的样本，用来自动补偿头位变化带来的整体漂移。不需要你做任何操作。</p>
+          <div class="row-between">
+            <span class="fine">头部转动后，多点击几次就会重新收敛。</span>
+            <button class="btn link sm" id="btnResetAuto">重置自校准</button>
+          </div>
+        </div>
+
+        <div class="card island-card">
+          <div class="card-head"><h3>灵动岛</h3><span class="pill tiny" id="islandPill">桌面版</span></div>
+          <p class="body-text">屏幕顶部常驻的小面板，可拖动、可展开。显示眨眼频率、用眼时长等；指标异常时会自动弹开提醒。<b>只在桌面版（EyePilot.exe）里浮在桌面上</b>，网页版这里只做预览。</p>
+          <label class="switch-row">启用灵动岛
+            <input type="checkbox" id="setIsland" checked /><i class="switch"></i>
+          </label>
+          <div class="island-items">
+            <label class="chip-check"><input type="checkbox" id="isBlink" checked /><span>眨眼频率</span></label>
+            <label class="chip-check"><input type="checkbox" id="isSession" checked /><span>用眼时长</span></label>
+            <label class="chip-check"><input type="checkbox" id="isFatigue" checked /><span>疲劳指数</span></label>
+            <label class="chip-check"><input type="checkbox" id="isHealth" checked /><span>健康分</span></label>
+            <label class="chip-check"><input type="checkbox" id="isBreak" checked /><span>下次休息</span></label>
+          </div>
+          <div class="island-custom">
+            <input type="text" id="islandLabel" maxlength="8" placeholder="标题（如：正在播放）" />
+            <input type="text" id="islandText" maxlength="40" placeholder="内容（如：晴天 - 周杰伦）" />
+          </div>
+          <div class="island-preview">
+            <iframe id="islandPreview" src="/island.html?preview=1" title="灵动岛预览" loading="lazy"></iframe>
+          </div>
+          <div class="row-between">
+            <span class="fine">自定义内容也可以由外部程序写入。</span>
+            <button class="btn ghost sm" id="btnIslandShow">在桌面显示 / 隐藏</button>
           </div>
         </div>
 
@@ -515,7 +550,7 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.0.1</span></div>
+          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.1.0</span></div>
           <p class="body-text">EyePilot · 瞳行，校园黑客松参赛作品。技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移特征 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件，普通笔记本摄像头即可运行。</p>
           <p class="fine">本作品不构成医疗建议。若持续眼干、眼痛或视力模糊，请就医。</p>
         </div>

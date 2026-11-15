@@ -47,6 +47,33 @@ function afterFrame(frame, gaze) {
   health.ingest(frame, gaze);
   pluginHost.frame(frame, gaze);
   renderLive(frame, gaze, frame.fps);
+  checkPoseDrift(frame);
+}
+
+/* ---------------- 头位漂移提示 ---------------- */
+
+let lastPoseWarnAt = 0;
+
+/**
+ * 单目摄像头的物理限制：头一转，虹膜与眼角的几何关系就变了，线性模型会失准。
+ * 这里只做「发现并引导」，不假装能自动补偿：
+ * 偏差超过阈值就提示去做五点精细对齐（10 秒），比重做完整校准快得多。
+ */
+function checkPoseDrift(frame) {
+  const p = app.model && app.model.pose;
+  if (!p || !frame || !frame.present) return;
+  const now = performance.now();
+  if (now - lastPoseWarnAt < 45000) return;
+  const dyaw = Math.abs((frame.yawDeg || 0) - (p.yaw || 0));
+  const dpitch = Math.abs((frame.pitchDeg || 0) - (p.pitch || 0));
+  const dscale = p.scale ? Math.abs((frame.eyeScale || 0) / p.scale - 1) : 0;
+  if (dyaw < 13 && dpitch < 13 && dscale < 0.2) return;
+  lastPoseWarnAt = now;
+  notifyAlert({
+    level: 'warn',
+    title: '头部位置和校准时不一样了',
+    detail: '眼控会有偏移。点「设置 → 五点精细对齐」看 5 个点（约 10 秒）即可拉回，不必重做完整校准。',
+  });
 }
 
 function handleVisionFrame(frame) {
@@ -184,11 +211,20 @@ function releaseCalPreview() {
 
 function onCalibrationDone(model) {
   releaseCalPreview();
+  // 记住校准时的头位，用来判断之后有没有“头动了”
+  const f = app.frame;
+  model.pose = {
+    yaw: f ? f.yawDeg || 0 : 0,
+    pitch: f ? f.pitchDeg || 0 : 0,
+    scale: f ? f.eyeScale || 0 : 0,
+  };
   persistModel(model);
-  // 新校准自带了偏差校正，手动偏移归零
-  saveSettings({ offsetX: 0, offsetY: 0 });
+  // 新校准自带了偏差校正，手动偏移与自校准都归零
+  saveSettings({ offsetX: 0, offsetY: 0, autoX: 0, autoY: 0, autoN: 0 });
   tracker.setOffset(0, 0);
+  tracker.resetAuto();
   ui.updateOffsetUI();
+  ui.updateAutoUI();
   app.settings.smooth = model.smooth != null ? model.smooth : app.settings.smooth;
   tracker.setSmooth(app.settings.smooth);
   input.resume();
@@ -322,23 +358,60 @@ const actions = {
   },
   centerOffset: () => ui.startAlign(),
   /**
-   * 纵向三点微调：pairs 是 [{predY, targetY}]，用仿射拟合同时修偏移与增益。
-   * 直接改 model.calY 并落盘，不动用户手动的 offset，两者互不干扰。
+   * 五点精细对齐：samples 是 [{predX,predY,targetX,targetY}]。
+   * 横向用左/中/右三点、纵向用上/中/下三点，各自拟合 target ≈ a·pred + b，
+   * 同时修偏移与增益；结果直接写回模型并落盘，不动用户手动的 offset。
    */
-  applyVerticalRefine: (pairs) => {
+  applyRefine: (samples) => {
     const m = app.model;
-    if (!m || !pairs || pairs.length < 2) return;
-    const fit = fitAffine1D(pairs.map((p) => p.predY), pairs.map((p) => p.targetY));
-    m.calY = { a: fit.a, b: fit.b };
+    if (!m || !samples || samples.length < 3) return;
+    const fx = fitAffine1D(samples.map((s) => s.predX), samples.map((s) => s.targetX));
+    const fy = fitAffine1D(samples.map((s) => s.predY), samples.map((s) => s.targetY));
+    m.calX = { a: fx.a, b: fx.b };
+    m.calY = { a: fy.a, b: fy.b };
     persistModel(m);
     tracker.model = m;
     tracker.reset();
-    const px = Math.round(fit.b * window.innerHeight);
+    // 手动微调与自校准都归零：新的仿射已经吸收了它们
+    saveSettings({ offsetX: 0, offsetY: 0, autoX: 0, autoY: 0, autoN: 0 });
+    tracker.setOffset(0, 0);
+    tracker.resetAuto();
+    ui.updateOffsetUI();
+    ui.updateAutoUI();
+    const px = Math.round(fy.b * window.innerHeight);
     notifyAlert({
       level: 'good',
-      title: '纵向已对齐',
-      detail: `增益 ${fit.a.toFixed(2)}、偏移 ${px > 0 ? '+' : ''}${px} px。现在看屏幕上下沿，光标应该都在视线附近。`,
+      title: '五点对齐完成',
+      detail: `横向增益 ${fx.a.toFixed(2)}、纵向增益 ${fy.a.toFixed(2)}，纵向偏移 ${px > 0 ? '+' : ''}${px} px。`,
     });
+  },
+  resetAutoOffset: () => {
+    saveSettings({ autoX: 0, autoY: 0, autoN: 0 });
+    tracker.resetAuto();
+    ui.updateAutoUI();
+    notifyAlert({ level: 'info', title: '已重置自校准', detail: '接下来每次注视点击会重新累计修正量。' });
+  },
+  setIslandEnabled: (on) => {
+    const isl = { ...app.settings.island, enabled: !!on };
+    saveSettings({ island: isl });
+    const d = window.eyePilotDesktop;
+    if (d && d.island) d.island.setVisible(!!on);
+    pushIsland();
+  },
+  setIslandItem: (key, on) => {
+    const isl = { ...app.settings.island, items: { ...app.settings.island.items, [key]: !!on } };
+    saveSettings({ island: isl });
+    pushIsland();
+  },
+  setIslandCustom: (label, text) => {
+    const isl = { ...app.settings.island, customLabel: label, customText: text };
+    saveSettings({ island: isl });
+    pushIsland();
+  },
+  toggleIslandWindow: () => {
+    const d = window.eyePilotDesktop;
+    if (d && d.island) d.island.toggle();
+    else notifyAlert({ level: 'info', title: '灵动岛是桌面版功能', detail: '网页版只能在设置里预览；用 EyePilot.exe 打开时会显示在屏幕顶部。' });
   },
   resetOffset: () => {
     saveSettings({ offsetX: 0, offsetY: 0 });
@@ -387,12 +460,82 @@ const actions = {
   },
 };
 
+/* ---------------- 灵动岛 ---------------- */
+
+function islandPayload() {
+  const m = app.metrics || {};
+  const isl = app.settings.island || {};
+  const limit = (app.settings.breakMinutes || 20) * 60000;
+  const left = Math.max(0, limit - (health.continuousMs || 0));
+  const a = health.alerts && health.alerts[0];
+  const sec = app.sessionStart ? Math.floor((Date.now() - app.sessionStart) / 1000) : 0;
+  return {
+    enabled: !!isl.enabled,
+    items: isl.items || {},
+    customLabel: isl.customLabel || '',
+    customText: isl.customText || '',
+    live: app.mode === 'running' || app.mode === 'demo',
+    mode: app.mode,
+    blink: Math.round(m.blinkRate || 0),
+    fatigue: Math.round(m.fatigue || 0),
+    health: Math.round(m.health || 0),
+    focus: Math.round(m.focus || 0),
+    session: sec,
+    nextBreak: Math.round(left / 1000),
+    alert: a ? { level: a.level, title: a.title, detail: a.detail, ts: a.ts || Date.now() } : null,
+    ts: Date.now(),
+  };
+}
+
+async function pushIsland() {
+  // 只有桌面版才需要推给灵动岛；网页版不发请求，避免控制台里一片 404/501
+  if (!window.eyePilotDesktop) return;
+  try {
+    const res = await fetch('/api/island/metrics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(islandPayload()),
+    });
+    if (!res.ok) throw new Error('bad status');
+  } catch { /* 网页版没有这个接口，忽略 */ }
+}
+
+function showView(name) {
+  const btn = document.querySelector(`.rail-btn[data-view="${name}"]`);
+  if (btn) btn.click();
+}
+
+let pausedByTray = false;
+
+/** 桌面版外壳（托盘 / 灵动岛）发来的指令 */
+function bindDesktop() {
+  const d = window.eyePilotDesktop;
+  if (!d || !d.onAction) return;
+  d.onAction((name) => {
+    if (name === 'calibrate') { showView('console'); calibrate(false); }
+    else if (name === 'refine') { showView('settings'); ui.startAlign(); }
+    else if (name === 'settings') showView('settings');
+    else if (name === 'report') { showView('coach'); actions.report(); }
+    else if (name === 'toggle-pause') {
+      pausedByTray = !pausedByTray;
+      if (pausedByTray) input.pause();
+      else input.resume();
+      notifyAlert({
+        level: 'info',
+        title: pausedByTray ? '眼控已暂停' : '眼控已恢复',
+        detail: pausedByTray ? '仍在记录用眼健康，只是不再响应注视点击。' : '注视 0.8 秒即可点击。',
+      });
+    }
+  });
+}
+
 /* ---------------- 启动 ---------------- */
 
 function boot() {
   tracker = new GazeTracker({});
   tracker.setSmooth(app.settings.smooth);
   tracker.setOffset(app.settings.offsetX || 0, app.settings.offsetY || 0);
+  tracker.setAuto(app.settings.autoX || 0, app.settings.autoY || 0, app.settings.autoN || 0);
   input = createGazeInput(app.settings, () => {});
   health = new HealthMonitor({ onMetrics, onAlert, onBreak: onBreakEvent });
   coach = new AICoach({ onAssessment: (a) => renderAssessment(a) });
@@ -410,6 +553,23 @@ function boot() {
     onCancel: onCalibrationCancel,
   });
   renderPluginGrid(document.getElementById('pluginGrid'));
+
+  // 每次“注视点击”都提供一个已知落点，用它缓慢修正整体偏移（头挪动后的漂移主要靠这个）
+  window.addEventListener('eyepilot:click', (ev) => {
+    const el = ev.detail && ev.detail.target;
+    if (!el || !el.getBoundingClientRect) return;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    if (tracker.observeAnchor(r.left + r.width / 2, r.top + r.height / 2)) {
+      const a = tracker.auto;
+      saveSettings({ autoX: a.x, autoY: a.y, autoN: a.n });
+      ui.updateAutoUI();
+    }
+  });
+
+  // 灵动岛数据推送（桌面版由主进程转发到悬浮窗；网页版没有该接口，静默失败）
+  setInterval(pushIsland, 1000);
+  bindDesktop();
   ui.renderAssessment(assessLocal(health.metrics, { series: health.series }));
   updateBreakRing(health);
 

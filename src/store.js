@@ -12,6 +12,17 @@ export const DEFAULT_SETTINGS = {
   smooth: 65,
   offsetX: 0,
   offsetY: 0,
+  // 使用中自校准累计的修正量（每次注视点击学一点）
+  autoX: 0,
+  autoY: 0,
+  autoN: 0,
+  // 灵动岛（桌面版为独立悬浮窗，网页版只做预览）
+  island: {
+    enabled: true,
+    items: { blink: true, session: true, fatigue: true, health: true, nextBreak: true, clock: false },
+    customLabel: '正在播放',
+    customText: '',
+  },
   bigTargets: true,
   mirror: true,
   mesh: true,
@@ -45,6 +56,9 @@ export const app = {
 export function mergeSettings(raw) {
   const s = { ...DEFAULT_SETTINGS, ...(raw || {}) };
   s.llm = { ...DEFAULT_SETTINGS.llm, ...((raw && raw.llm) || {}) };
+  const isl = { ...DEFAULT_SETTINGS.island, ...((raw && raw.island) || {}) };
+  isl.items = { ...DEFAULT_SETTINGS.island.items, ...((raw && raw.island && raw.island.items) || {}) };
+  s.island = isl;
   return s;
 }
 

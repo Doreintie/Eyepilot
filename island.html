@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EyePilot 灵动岛</title>
+<style>
+  :root {
+    --bg: rgba(13, 17, 24, .86);
+    --bg-solid: #0d1118;
+    --line: rgba(255, 255, 255, .10);
+    --line-2: rgba(255, 255, 255, .16);
+    --text: #e9f1fb;
+    --muted: #8fa1b8;
+    --dim: #6c7d92;
+    --accent: #2ee6d6;
+    --warn: #ffc14d;
+    --bad: #ff6b6b;
+    --good: #3ddc97;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    display: flex; justify-content: center;
+  }
+  #island {
+    width: 100%;
+    background: var(--bg);
+    backdrop-filter: blur(22px) saturate(1.4);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    box-shadow: 0 16px 42px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .06);
+    overflow: hidden;
+    transition: height .28s cubic-bezier(.22, 1, .36, 1), border-radius .28s;
+    -webkit-app-region: drag;
+  }
+  body.expanded #island { border-radius: 22px; }
+  body.preview { align-items: center; }
+  body.preview #island {
+    width: 380px; background: #0c1016; backdrop-filter: none;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .5);
+  }
+  body.preview .chev { display: none; }
+  body.preview .bar { justify-content: space-between; }
+
+  .bar {
+    display: flex; align-items: center; gap: 10px;
+    height: 54px; padding: 0 12px 0 14px;
+  }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--good);
+    box-shadow: 0 0 10px currentColor; color: var(--good); flex: none;
+    transition: background .3s, color .3s;
+  }
+  .dot.warn { background: var(--warn); color: var(--warn); }
+  .dot.bad { background: var(--bad); color: var(--bad); }
+  .dot.idle { background: var(--dim); color: var(--dim); box-shadow: none; }
+
+  .live { display: flex; align-items: baseline; gap: 5px; flex: none; }
+  .live b {
+    font-size: 19px; font-weight: 650; letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .live span { font-size: 10.5px; color: var(--dim); }
+
+  .sep { width: 1px; height: 18px; background: var(--line-2); flex: none; }
+
+  .mid { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+  .chip { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+  .chip b { font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chip span { font-size: 10px; color: var(--dim); white-space: nowrap; }
+
+  .peek {
+    font-size: 11.5px; color: var(--muted); flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  .chev {
+    -webkit-app-region: no-drag;
+    width: 26px; height: 26px; border-radius: 9px; flex: none;
+    display: grid; place-items: center; cursor: pointer;
+    background: rgba(255, 255, 255, .06); border: 1px solid var(--line);
+    color: var(--muted); transition: background .2s, color .2s, transform .28s;
+  }
+  .chev:hover { background: rgba(255, 255, 255, .12); color: var(--text); }
+  body.expanded .chev { transform: rotate(180deg); }
+  .chev svg { width: 13px; height: 13px; }
+
+  .body { padding: 0 14px 14px; display: none; -webkit-app-region: no-drag; }
+  body.expanded .body { display: block; }
+
+  .alert {
+    display: none; align-items: flex-start; gap: 8px;
+    margin: 2px 0 12px; padding: 9px 11px; border-radius: 12px;
+    font-size: 11.5px; line-height: 1.55;
+    border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+    background: color-mix(in srgb, var(--warn) 10%, transparent);
+    color: #ffd995;
+  }
+  .alert.show { display: flex; }
+  .alert.bad { border-color: color-mix(in srgb, var(--bad) 40%, transparent); background: color-mix(in srgb, var(--bad) 12%, transparent); color: #ffb3b3; }
+  .alert i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-top: 6px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cell {
+    padding: 10px 12px; border-radius: 13px;
+    background: rgba(255, 255, 255, .045); border: 1px solid var(--line);
+  }
+  .cell span { font-size: 10.5px; color: var(--dim); display: block; margin-bottom: 5px; }
+  .cell b { font-size: 20px; font-weight: 640; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .cell b em { font-style: normal; font-size: 10.5px; color: var(--dim); margin-left: 3px; font-weight: 500; }
+  .cell.wide { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; }
+  .cell.wide b { font-size: 15px; }
+
+  .custom {
+    display: none; align-items: center; gap: 10px; margin-top: 8px;
+    padding: 10px 12px; border-radius: 13px;
+    background: rgba(46, 230, 214, .07); border: 1px solid rgba(46, 230, 214, .18);
+  }
+  .custom.show { display: flex; }
+  .custom i {
+    flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+    background: rgba(46, 230, 214, .16); color: var(--accent);
+  }
+  .custom i svg { width: 14px; height: 14px; }
+  .custom div { min-width: 0; }
+  .custom span { display: block; font-size: 9.5px; color: var(--dim); letter-spacing: .04em; }
+  .custom b { display: block; font-size: 12px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .foot { display: flex; gap: 7px; margin-top: 11px; }
+  .foot button {
+    flex: 1; height: 34px; border-radius: 10px; cursor: pointer;
+    font-size: 11.5px; font-family: inherit; color: var(--text);
+    background: rgba(255, 255, 255, .07); border: 1px solid var(--line-2);
+    transition: background .18s, border-color .18s;
+  }
+  .foot button:hover { background: rgba(255, 255, 255, .13); border-color: rgba(255, 255, 255, .26); }
+  .foot button.primary { background: rgba(46, 230, 214, .16); border-color: rgba(46, 230, 214, .34); color: #b9fff8; }
+  .foot button.primary:hover { background: rgba(46, 230, 214, .24); }
+</style>
+</head>
+<body>
+  <div id="island">
+    <div class="bar">
+      <i class="dot idle" id="dot"></i>
+      <div class="live"><b id="blink">--</b><span>次/分</span></div>
+      <i class="sep"></i>
+      <div class="mid">
+        <div class="chip"><b id="session">00:00</b><span>用眼</span></div>
+        <div class="chip"><b id="fatigue">--</b><span>疲劳</span></div>
+      </div>
+      <div class="peek" id="peek"></div>
+      <div class="chev" id="chev" title="展开 / 收起">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+    </div>
+
+    <div class="body">
+      <div class="alert" id="alert"><i></i><span id="alertText"></span></div>
+
+      <div class="grid">
+        <div class="cell"><span>眨眼频率</span><b id="cBlink">--<em>次/分</em></b></div>
+        <div class="cell"><span>用眼时长</span><b id="cSession">--</b></div>
+        <div class="cell"><span>疲劳指数</span><b id="cFatigue">--</b></div>
+        <div class="cell"><span>健康分</span><b id="cHealth">--</b></div>
+        <div class="cell wide"><span>下次远眺</span><b id="cBreak">--</b></div>
+      </div>
+
+      <div class="custom" id="custom">
+        <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg></i>
+        <div><span id="customLabel">正在播放</span><b id="customText">--</b></div>
+      </div>
+
+      <div class="foot">
+        <button class="primary" data-act="show">打开主界面</button>
+        <button data-act="calibrate">重新校准</button>
+        <button data-act="refine">五点对齐</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const host = window.islandHost || null;
+  const preview = new URLSearchParams(location.search).has('preview') || !host;
+  if (preview) {
+    document.body.classList.add('preview');
+    // iframe 里没有透明合成，显式给个深色底，避免预览区域发白
+    document.documentElement.style.background = '#05070c';
+    document.body.style.background = '#05070c';
+  }
+
+  const COLLAPSED = 54;
+  let expanded = false;
+  let manual = false;
+  let lastAlertTs = 0;
+  let peekTimer = 0;
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const clock = (s) => `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}`;
+
+  function fitHeight() {
+    if (!host || !host.resize) return;
+    if (!expanded) { host.resize(400, COLLAPSED); return; }
+    // 内容多高就开多高，避免底部留一大块空白
+    const h = document.getElementById('island').scrollHeight;
+    host.resize(400, Math.max(COLLAPSED + 40, Math.ceil(h) + 2));
+  }
+
+  function setExpanded(on) {
+    expanded = on;
+    document.body.classList.toggle('expanded', on);
+    fitHeight();
+    setTimeout(fitHeight, 320);
+  }
+
+  $('chev').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (preview) return;
+    manual = true;
+    setExpanded(!expanded);
+  });
+
+  document.querySelectorAll('[data-act]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (preview) return;
+      const act = btn.dataset.act;
+      if (host && host.action) host.action(act);
+    });
+  });
+
+  function levelOf(p) {
+    if (!p.live) return 'idle';
+    if (p.alert && p.alert.level === 'bad') return 'bad';
+    if (p.fatigue >= 65 || (p.blink && p.blink < 8)) return 'warn';
+    if (p.alert && p.alert.level === 'warn') return 'warn';
+    return 'on';
+  }
+
+  function render(p) {
+    const items = p.items || {};
+    const lv = levelOf(p);
+    $('dot').className = 'dot ' + (lv === 'on' ? '' : lv);
+
+    if (items.blink !== false) {
+      $('blink').textContent = p.blink > 0 ? p.blink : '--';
+    } else { $('blink').textContent = '—'; }
+
+    $('session').textContent = clock(p.session || 0);
+    $('fatigue').textContent = p.fatigue || '--';
+    $('cBlink').innerHTML = `${p.blink || '--'}<em>次/分</em>`;
+    $('cSession').textContent = clock(p.session || 0);
+    $('cFatigue').textContent = p.fatigue || '--';
+    $('cHealth').textContent = p.health || '--';
+    $('cBreak').textContent = !p.live
+      ? '未启动'
+      : (p.nextBreak == null ? '--'
+        : (p.nextBreak <= 0 ? '该休息了' : `${Math.floor(p.nextBreak / 60)} 分 ${pad(p.nextBreak % 60)} 秒后`));
+
+    const showCustom = !!(p.customText && p.items && p.items.custom !== false);
+    $('custom').classList.toggle('show', showCustom);
+    if (showCustom) {
+      $('customLabel').textContent = p.customLabel || '自定义';
+      $('customText').textContent = p.customText;
+    }
+
+    // 收起状态下的“一览”：优先显示提醒，其次显示自定义内容
+    const peek = $('peek');
+    if (p.alert && p.alert.title) {
+      peek.textContent = p.alert.title;
+    } else if (showCustom) {
+      peek.textContent = p.customText;
+    } else {
+      peek.textContent = p.live ? '用眼正常' : '等待启动相机';
+    }
+
+    if (p.alert && p.alert.ts && p.alert.ts > lastAlertTs) {
+      lastAlertTs = p.alert.ts;
+      const box = $('alert');
+      box.className = 'alert show' + (p.alert.level === 'bad' ? ' bad' : '');
+      $('alertText').textContent = `${p.alert.title}：${p.alert.detail || ''}`.slice(0, 90);
+      if (!preview && !expanded) {
+        setExpanded(true);
+        clearTimeout(peekTimer);
+        peekTimer = setTimeout(() => { if (!manual) setExpanded(false); }, 5200);
+      }
+    }
+  }
+
+  async function tick() {
+    if (preview) {
+      // 设置里的预览：用一段稳定的示例数据，避免空白
+      render({
+        live: true, items: {}, blink: 17, session: 4280, fatigue: 28, health: 82,
+        nextBreak: 640, customLabel: '正在播放', customText: '晴天 — 周杰伦',
+        alert: null,
+      });
+      return;
+    }
+    try {
+      const res = await fetch('/api/island/metrics', { cache: 'no-store' });
+      if (!res.ok) throw new Error('no api');
+      const p = await res.json();
+      if (p && p.ts) {
+        p.items = p.items || {};
+        p.items.custom = !!(p.customText);
+        render(p);
+      }
+    } catch {
+      render({ live: false, items: {}, blink: 0, session: 0, fatigue: 0, health: 0, nextBreak: null });
+    }
+  }
+
+  if (host && host.resize) host.resize(400, COLLAPSED);
+  tick();
+  setInterval(tick, 800);
+})();
+</script>
+</body>
+</html>

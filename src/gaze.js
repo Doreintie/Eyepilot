@@ -27,6 +27,35 @@ export class GazeTracker {
     this.offset = { x: 0, y: 0 };
     this.beyondSince = 0;
     this.shown = null;
+    // 使用中自校准：每次“注视点击”都提供了一个我们知道大致落点的样本，
+    // 用它缓慢修正整体偏移，抵消头位变化带来的漂移。
+    this.auto = { x: 0, y: 0, n: 0 };
+  }
+
+  setAuto(x, y, n = 0) {
+    this.auto = { x: Number(x) || 0, y: Number(y) || 0, n: Number(n) || 0 };
+  }
+
+  resetAuto() {
+    this.auto = { x: 0, y: 0, n: 0 };
+    this.reset();
+  }
+
+  /**
+   * 用一次已知落点修正整体偏移：target 是用户注视目标的屏幕坐标。
+   * 残差过大（说明看的是别处或识别跳点）直接丢弃；修正量做 EMA，避免单次抖动带偏。
+   */
+  observeAnchor(tx, ty) {
+    const g = this.gaze;
+    if (!g || !g.valid || !Number.isFinite(tx) || !Number.isFinite(ty)) return false;
+    const dx = tx - g.x;
+    const dy = ty - g.y;
+    if (Math.hypot(dx, dy) > 260) return false;
+    const k = 0.28;
+    this.auto.x = clamp(this.auto.x + dx * k, -170, 170);
+    this.auto.y = clamp(this.auto.y + dy * k, -170, 170);
+    this.auto.n++;
+    return true;
   }
 
   setSmooth(v) {
@@ -132,8 +161,8 @@ export class GazeTracker {
       this.fy.reset();
     }
 
-    const px = clamp(mx, 0, 1) * vw + this.offset.x;
-    const py = clamp(my, 0, 1) * vh + this.offset.y;
+    const px = clamp(mx, 0, 1) * vw + this.offset.x + this.auto.x;
+    const py = clamp(my, 0, 1) * vh + this.offset.y + this.auto.y;
     let fx = clamp(this.fx.filter(clamp(px, 0, vw), dt), 0, vw);
     let fy = clamp(this.fy.filter(clamp(py, 0, vh), dt), 0, vh);
 

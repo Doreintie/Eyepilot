@@ -35,6 +35,9 @@ const ids = [
   'pluginGrid', 'pluginCount',
   'setCamera', 'setDwell', 'valDwell', 'setClickMode', 'setSmooth', 'valSmooth',
   'setMirror', 'setMesh', 'setBig', 'offsetPill', 'btnCenterOffset', 'btnResetOffset',
+  'autoPill', 'btnResetAuto',
+  'setIsland', 'isBlink', 'isSession', 'isFatigue', 'isHealth', 'isBreak',
+  'islandLabel', 'islandText', 'islandPill', 'islandPreview', 'btnIslandShow',
   'setAlertBlink', 'setAlertDist', 'setAlertLight', 'setAlertBreak',
   'setSound', 'setFatigue', 'valFatigue', 'setBreak', 'valBreak', 'storageInfo', 'btnWipe',
   'calibration', 'calStage', 'calTarget', 'calHint', 'calProgressBar', 'calResult',
@@ -234,6 +237,14 @@ export function applyBigTargets() {
     const label = E.btnBig.querySelector('span');
     if (label) label.textContent = on ? '大按钮' : '标准';
   }
+}
+
+export function updateAutoUI() {
+  if (!E.autoPill) return;
+  const n = app.settings.autoN || 0;
+  const x = Math.round(app.settings.autoX || 0);
+  const y = Math.round(app.settings.autoY || 0);
+  E.autoPill.textContent = `${n} 次 · ${x > 0 ? '+' : ''}${x} , ${y > 0 ? '+' : ''}${y} px`;
 }
 
 export function updateOffsetUI() {
@@ -484,9 +495,11 @@ export function calibrationEls() {
 /* ---------------- 视线对齐 ---------------- */
 
 const ALIGN_STEPS = [
-  { y: 0.5, name: '屏幕中心' },
-  { y: 0.16, name: '屏幕上方' },
-  { y: 0.84, name: '屏幕下方' },
+  { x: 0.5, y: 0.5, name: '屏幕中心' },
+  { x: 0.5, y: 0.16, name: '屏幕上方' },
+  { x: 0.5, y: 0.84, name: '屏幕下方' },
+  { x: 0.16, y: 0.5, name: '屏幕左侧' },
+  { x: 0.84, y: 0.5, name: '屏幕右侧' },
 ];
 const ALIGN_SETTLE_MS = 750;
 const ALIGN_SAMPLE_MS = 900;
@@ -495,14 +508,14 @@ let alignRun = 0;
 let alignTimer = 0;
 
 /**
- * 纵向三点微调：中心 → 上方 → 下方。
- * 三个点能同时解出「偏移」和「增益」，所以“上准下偏 / 整体偏下”都能被修正；
- * 只做一次归中只能纠偏移，增益误差会一直在。
+ * 五点精细对齐：中心 → 上 → 下 → 左 → 右。
+ * 横向用「左/中/右」、纵向用「上/中/下」各三点，能同时解出两轴的偏移与增益，
+ * 所以“整体偏下”“越往右越偏”这类问题都能修（v1.0.1 只有纵向三点）。
  */
 export async function startAlign() {
   if (!E.alignOverlay) return;
   if (!app.model) {
-    toast('还没有校准', '先点「启动相机」完成一次校准，再做三点微调', 'warn', 4000);
+    toast('还没有校准', '先点「启动相机」完成一次校准，再做五点微调', 'warn', 4000);
     return;
   }
   clearTimeout(alignTimer);
@@ -510,10 +523,11 @@ export async function startAlign() {
   E.alignOverlay.classList.add('open');
   if (E.alignTitle) E.alignTitle.textContent = '盯住十字，保持 2 秒';
 
-  const pairs = [];
+  const samples = [];
   for (let i = 0; i < ALIGN_STEPS.length; i++) {
     const step = ALIGN_STEPS[i];
     if (run !== alignRun) return;
+    E.alignOverlay.style.setProperty('--align-x', `${step.x * 100}%`);
     E.alignOverlay.style.setProperty('--align-y', `${step.y * 100}%`);
     if (E.alignHint) E.alignHint.textContent = `第 ${i + 1} / ${ALIGN_STEPS.length} 点 · ${step.name}`;
 
@@ -536,17 +550,20 @@ export async function startAlign() {
     }
     if (sy.length >= 3) {
       const mid = (arr) => arr.slice().sort((a, b) => a - b)[Math.floor(arr.length / 2)];
-      pairs.push({ predY: mid(sy), targetY: step.y, predX: mid(sx) });
+      samples.push({
+        predX: mid(sx), predY: mid(sy),
+        targetX: step.x, targetY: step.y,
+      });
     }
   }
 
   if (run !== alignRun) return;
   E.alignOverlay.classList.remove('open');
-  if (pairs.length < 2) {
+  if (samples.length < 3) {
     toast('没采到有效视线', '确保脸在画面中、能正常眨眼，再试一次', 'warn', 4000);
     return;
   }
-  actions.applyVerticalRefine && actions.applyVerticalRefine(pairs);
+  actions.applyRefine && actions.applyRefine(samples);
 }
 
 function bindAlign() {
@@ -636,6 +653,17 @@ function applySettingsToForm() {
   E.setMirror.checked = !!s.mirror;
   E.setMesh.checked = !!s.mesh;
   E.setBig.checked = !!s.bigTargets;
+  const isl = s.island || {};
+  const items = isl.items || {};
+  if (E.setIsland) E.setIsland.checked = isl.enabled !== false;
+  if (E.isBlink) E.isBlink.checked = items.blink !== false;
+  if (E.isSession) E.isSession.checked = items.session !== false;
+  if (E.isFatigue) E.isFatigue.checked = items.fatigue !== false;
+  if (E.isHealth) E.isHealth.checked = items.health !== false;
+  if (E.isBreak) E.isBreak.checked = items.nextBreak !== false;
+  if (E.islandLabel) E.islandLabel.value = isl.customLabel || '';
+  if (E.islandText) E.islandText.value = isl.customText || '';
+  if (E.islandPill) E.islandPill.textContent = window.eyePilotDesktop ? '桌面版 · 已连接' : '网页版 · 仅预览';
   E.setAlertBlink.checked = !!s.alertBlink;
   E.setAlertDist.checked = !!s.alertDistance;
   E.setAlertLight.checked = !!s.alertLight;
@@ -652,6 +680,7 @@ function applySettingsToForm() {
   applyMirror();
   applyBigTargets();
   updateOffsetUI();
+  updateAutoUI();
 }
 
 export function applyMirror() {
@@ -735,7 +764,7 @@ function bindSettings() {
 
   $$('[data-offset]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const map = { up: [0, -8], down: [0, 8], left: [-8, 0], right: [8, 0] };
+      const map = { up: [0, -12], down: [0, 12], left: [-12, 0], right: [12, 0] };
       const d = map[btn.dataset.offset];
       if (d && actions.nudgeOffset) actions.nudgeOffset(d[0], d[1]);
     });
@@ -745,6 +774,27 @@ function bindSettings() {
   }
   if (E.btnResetOffset) {
     E.btnResetOffset.addEventListener('click', () => actions.resetOffset && actions.resetOffset());
+  }
+  if (E.btnResetAuto) {
+    E.btnResetAuto.addEventListener('click', () => actions.resetAutoOffset && actions.resetAutoOffset());
+  }
+  if (E.setIsland) {
+    E.setIsland.addEventListener('change', () => actions.setIslandEnabled && actions.setIslandEnabled(E.setIsland.checked));
+  }
+  const islandItemMap = { isBlink: 'blink', isSession: 'session', isFatigue: 'fatigue', isHealth: 'health', isBreak: 'nextBreak' };
+  for (const [id, key] of Object.entries(islandItemMap)) {
+    const el = E[id];
+    if (!el) continue;
+    el.addEventListener('change', () => actions.setIslandItem && actions.setIslandItem(key, el.checked));
+  }
+  if (E.islandLabel && E.islandText) {
+    const push = () => actions.setIslandCustom
+      && actions.setIslandCustom(E.islandLabel.value.trim(), E.islandText.value.trim());
+    E.islandLabel.addEventListener('change', push);
+    E.islandText.addEventListener('change', push);
+  }
+  if (E.btnIslandShow) {
+    E.btnIslandShow.addEventListener('click', () => actions.toggleIslandWindow && actions.toggleIslandWindow());
   }
 
   E.btnWipe.addEventListener('click', () => {
@@ -873,6 +923,7 @@ Object.assign(ui, {
   refreshSettingsForm,
   applyBigTargets,
   updateOffsetUI,
+  updateAutoUI,
   startAlign,
   appendChat,
   showReport,

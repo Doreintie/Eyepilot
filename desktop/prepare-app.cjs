@@ -5,6 +5,7 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const out = path.join(__dirname, 'build', 'app');
 const webOut = path.join(out, 'web');
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
 
 function copy(src, dest) {
   const stat = fs.statSync(src);
@@ -22,11 +23,13 @@ function copy(src, dest) {
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 
-for (const item of ['index.html', 'src', 'styles', 'vendor']) {
+for (const item of ['index.html', 'island.html', 'src', 'styles', 'vendor']) {
   copy(path.join(root, item), path.join(webOut, item));
 }
 
-fs.copyFileSync(path.join(__dirname, 'main.cjs'), path.join(out, 'main.cjs'));
+for (const file of ['main.cjs', 'preload-main.cjs', 'preload-island.cjs']) {
+  fs.copyFileSync(path.join(__dirname, file), path.join(out, file));
+}
 
 const icon = path.join(__dirname, 'icon.ico');
 if (fs.existsSync(icon)) fs.copyFileSync(icon, path.join(out, 'icon.ico'));
@@ -34,7 +37,7 @@ if (fs.existsSync(icon)) fs.copyFileSync(icon, path.join(out, 'icon.ico'));
 fs.writeFileSync(path.join(out, 'package.json'), JSON.stringify({
   name: 'EyePilot',
   productName: 'EyePilot',
-  version: '1.0.0',
+  version: pkg.version || '1.0.1',
   description: 'EyePilot · 瞳行 — AI 眼控与用眼健康助手',
   main: 'main.cjs',
 }, null, 2));

@@ -253,7 +253,13 @@ export class VisionEngine {
 
   loop() {
     if (!this.running) return;
-    this.raf = requestAnimationFrame(() => this.loop());
+    // 后台（最小化 / 切到别的窗口）时 requestAnimationFrame 会被浏览器暂停，
+    // 这里退化成定时器继续跑；Chromium 仍会降频，但远好过完全停止。
+    if (typeof document !== 'undefined' && document.hidden) {
+      this.raf = setTimeout(() => this.loop(), 120);
+    } else {
+      this.raf = requestAnimationFrame(() => this.loop());
+    }
     const v = this.video;
     if (!v || v.readyState < 2) return;
     if (v.currentTime === this.lastVideoTime) return;
@@ -392,6 +398,7 @@ export class VisionEngine {
   stop() {
     this.running = false;
     cancelAnimationFrame(this.raf);
+    clearTimeout(this.raf);
     if (this.stream) {
       this.stream.getTracks().forEach((t) => t.stop());
       this.stream = null;
