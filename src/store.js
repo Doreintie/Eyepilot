@@ -16,6 +16,13 @@ export const DEFAULT_SETTINGS = {
   autoX: 0,
   autoY: 0,
   autoN: 0,
+  // 控制方式：eye = 虹膜眼控（精细，需校准）；head = 头部转角（稳、免校准）
+  controlMode: 'eye',
+  headH: 8,
+  headV: 5,
+  headDead: 44,
+  headZeroYaw: 0,
+  headZeroPitch: 0,
   // 灵动岛（桌面版为独立悬浮窗，网页版只做预览）
   island: {
     enabled: true,

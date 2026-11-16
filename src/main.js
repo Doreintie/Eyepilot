@@ -60,6 +60,7 @@ let lastPoseWarnAt = 0;
  * 偏差超过阈值就提示去做五点精细对齐（10 秒），比重做完整校准快得多。
  */
 function checkPoseDrift(frame) {
+  if (app.settings.controlMode === 'head') return;
   const p = app.model && app.model.pose;
   if (!p || !frame || !frame.present) return;
   const now = performance.now();
@@ -147,9 +148,11 @@ async function startCamera() {
     app.sessionStart = Date.now();
     setStatus('cam', 'on', '相机就绪');
     setStatus('model', 'on', '模型就绪');
-    setPrimaryButton(app.model ? '重新校准' : '校准视线');
-    setStatus('cal', app.model ? 'on' : 'warn', app.model ? `已校准 · ${app.model.rmse || '?'}px` : '待校准');
-    setOnboard(app.model ? 'ready' : 'camera');
+    const headMode = app.settings.controlMode === 'head';
+    setPrimaryButton(headMode ? '头部模式' : app.model ? '重新校准' : '校准视线');
+    setStatus('cal', headMode ? 'on' : app.model ? 'on' : 'warn',
+      headMode ? '头部模式 · 免校准' : app.model ? `已校准 · ${app.model.rmse || '?'}px` : '待校准');
+    setOnboard(headMode || app.model ? 'ready' : 'camera');
     const devices = await vision.listCameras();
     setCameraOptions(devices);
     input.resume();
@@ -343,6 +346,12 @@ const actions = {
   applySettings: () => {
     tracker.setSmooth(app.settings.smooth);
     tracker.setOffset(app.settings.offsetX || 0, app.settings.offsetY || 0);
+    tracker.setControlMode(app.settings.controlMode || 'eye');
+    tracker.setHeadConfig({
+      hRange: app.settings.headH || 8,
+      vRange: app.settings.headV || 5,
+      dead: app.settings.headDead || 44,
+    });
     input.setSettings(app.settings);
     if (vision) vision.showMesh = app.settings.mesh;
     ui.els.dwellHint.textContent = (app.settings.dwellMs / 1000).toFixed(1);
@@ -356,7 +365,8 @@ const actions = {
     tracker.setOffset(nx, ny);
     ui.updateOffsetUI();
   },
-  centerOffset: () => ui.startAlign(),
+  // 头部模式下“对齐”就是重新归中；眼控模式才走五点拟合
+  centerOffset: () => (app.settings.controlMode === 'head' ? actions.recenterHead(false) : ui.startAlign()),
   /**
    * 五点精细对齐：samples 是 [{predX,predY,targetX,targetY}]。
    * 横向用左/中/右三点、纵向用上/中/下三点，各自拟合 target ≈ a·pred + b，
@@ -390,6 +400,38 @@ const actions = {
     tracker.resetAuto();
     ui.updateAutoUI();
     notifyAlert({ level: 'info', title: '已重置自校准', detail: '接下来每次注视点击会重新累计修正量。' });
+  },
+  setControlMode: (mode) => {
+    const m = mode === 'head' ? 'head' : 'eye';
+    saveSettings({ controlMode: m });
+    tracker.setControlMode(m);
+    if (m === 'head') actions.recenterHead(true);
+    else tracker.reset();
+    ui.updateModeUI();
+    notifyAlert({
+      level: 'info',
+      title: m === 'head' ? '已切换到头部模式' : '已切换到眼控模式',
+      detail: m === 'head'
+        ? '现在用转头移动光标：幅度由「水平/垂直范围」决定，停下即锁定。点「重新归中」可把当前头部位置设为屏幕中心。'
+        : '回到虹膜眼控，需要先校准；头位变化后可以点几次让它自校准。',
+    });
+  },
+  recenterHead: (silent) => {
+    const f = app.frame;
+    if (!f || !f.present || !Number.isFinite(f.yawDeg)) {
+      if (!silent) ui.toast('还没检测到人脸', '让脸出现在画面里再点「重新归中」', 'warn', 3500);
+      return;
+    }
+    saveSettings({ headZeroYaw: f.yawDeg, headZeroPitch: f.pitchDeg });
+    tracker.setHeadZero(f.yawDeg, f.pitchDeg);
+    tracker.setControlMode('head');
+    if (!silent) {
+      notifyAlert({
+        level: 'good',
+        title: '已归中',
+        detail: `当前头部姿态（yaw ${f.yawDeg.toFixed(1)}° / pitch ${f.pitchDeg.toFixed(1)}°）视为屏幕中心。`,
+      });
+    }
   },
   setIslandEnabled: (on) => {
     const isl = { ...app.settings.island, enabled: !!on };
@@ -538,6 +580,13 @@ function boot() {
   tracker.setSmooth(app.settings.smooth);
   tracker.setOffset(app.settings.offsetX || 0, app.settings.offsetY || 0);
   tracker.setAuto(app.settings.autoX || 0, app.settings.autoY || 0, app.settings.autoN || 0);
+  tracker.setControlMode(app.settings.controlMode || 'eye');
+  tracker.setHeadConfig({
+    hRange: app.settings.headH || 8,
+    vRange: app.settings.headV || 5,
+    dead: app.settings.headDead || 44,
+  });
+  tracker.setHeadZero(app.settings.headZeroYaw || 0, app.settings.headZeroPitch || 0);
   input = createGazeInput(app.settings, () => {});
   health = new HealthMonitor({ onMetrics, onAlert, onBreak: onBreakEvent });
   coach = new AICoach({ onAssessment: (a) => renderAssessment(a) });

@@ -105,7 +105,23 @@ export function analyzeFace(result, width, height) {
   const yawN = (nose.x - eyeMid.x) / eyeSpan;
   const pitchN = (nose.y - eyeMid.y) / eyeSpan - 0.72;
   const chinN = (chin.y - eyeMid.y) / eyeSpan;
-  const roll = (Math.atan2(boxR.cy - boxL.cy, boxR.cx - boxL.cx) * 180) / Math.PI;
+
+  // 用「脸侧两点 + 额头/下巴」的 z 差算真实角度（借鉴 visual_mouse）：
+  // 整张脸的几何平均，比「鼻尖相对眼心」这种两点估计稳得多，而且单位是真的度。
+  //   yaw   > 0  头转向自己的左侧
+  //   pitch > 0  低头
+  //   roll  > 0  向右歪头
+  const RAD = 180 / Math.PI;
+  const pL = P(234);   // 脸左侧（画面左）
+  const pR = P(454);   // 脸右侧（画面右）
+  const pTop = P(10);  // 额头顶
+  const pChin = P(152);
+  const zL = lm[234].z; const zR = lm[454].z;
+  const zTop = lm[10].z; const zChin = lm[152].z;
+  // 归一化坐标里 z 与 x 同尺度，乘 frameWidth 后可直接和像素差做比值
+  const yawDeg = -Math.atan2((zL - zR) * width, pL.x - pR.x) * RAD;
+  const pitchDeg = -Math.atan2((zTop - zChin) * width, (pTop.y - pChin.y) * 0.75) * RAD;
+  const rollDeg = Math.atan2((pL.y - pR.y) * 0.75, pL.x - pR.x) * RAD;
 
   const all = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
   for (const p of lm) {
@@ -128,9 +144,9 @@ export function analyzeFace(result, width, height) {
     eyeScale,
     yaw: yawN,
     pitch: pitchN + (chinN - 2.5) * 0.06,
-    yawDeg: Math.round(yawN * 46),
-    pitchDeg: Math.round(pitchN * 55),
-    rollDeg: Math.round(roll),
+    yawDeg: +yawDeg.toFixed(2),
+    pitchDeg: +pitchDeg.toFixed(2),
+    rollDeg: +rollDeg.toFixed(2),
     blinkL,
     blinkR,
     open: clamp(1 - Math.max(blinkL, blinkR), 0, 1),

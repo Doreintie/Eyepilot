@@ -486,6 +486,24 @@
         </div>
 
         <div class="card">
+          <div class="card-head"><h3>控制方式</h3><span class="pill tiny" id="modePill">眼控</span></div>
+          <p class="body-text">眼控读虹膜，精细但要校准、对头位敏感；<b>头部模式只读头部转角</b>，极稳、免校准，代价是要用转头来移动光标。</p>
+          <div class="mode-switch">
+            <button class="mode-btn on" data-mode="eye" data-gaze>眼控模式</button>
+            <button class="mode-btn" data-mode="head" data-gaze>头部模式</button>
+          </div>
+          <div class="head-config" id="headConfig">
+            <label class="range-row"><span>水平范围</span><input type="range" id="setHeadH" min="4" max="16" step="1" value="8" /><b id="headHHint">8°</b></label>
+            <label class="range-row"><span>垂直范围</span><input type="range" id="setHeadV" min="3" max="12" step="1" value="5" /><b id="headVHint">5°</b></label>
+            <label class="range-row"><span>死区</span><input type="range" id="setHeadDead" min="10" max="80" step="2" value="44" /><b id="headDeadHint">44px</b></label>
+            <div class="row-between">
+              <span class="fine">范围越小，需要的转头幅度越小；死区越大越稳、但更黏。</span>
+              <button class="btn ghost sm" id="btnRecenter" data-gaze>重新归中</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
           <div class="card-head"><h3>视线微调</h3><span class="pill tiny" id="offsetPill">偏移 0 , 0 px</span></div>
           <p class="body-text">光标整体偏上/偏下、或「越往右越偏」：点「五点精细对齐」，依次盯住中心 / 上 / 下 / 左 / 右各 2 秒，横纵两轴的偏移与增益会一起重算。小范围偏差也可以用方向键推。</p>
           <div class="nudge">
@@ -550,7 +568,7 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.1.0</span></div>
+          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.2.0</span></div>
           <p class="body-text">EyePilot · 瞳行，校园黑客松参赛作品。技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移特征 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件，普通笔记本摄像头即可运行。</p>
           <p class="fine">本作品不构成医疗建议。若持续眼干、眼痛或视力模糊，请就医。</p>
         </div>

@@ -36,6 +36,8 @@ const ids = [
   'setCamera', 'setDwell', 'valDwell', 'setClickMode', 'setSmooth', 'valSmooth',
   'setMirror', 'setMesh', 'setBig', 'offsetPill', 'btnCenterOffset', 'btnResetOffset',
   'autoPill', 'btnResetAuto',
+  'modePill', 'headConfig', 'setHeadH', 'setHeadV', 'setHeadDead',
+  'headHHint', 'headVHint', 'headDeadHint', 'btnRecenter',
   'setIsland', 'isBlink', 'isSession', 'isFatigue', 'isHealth', 'isBreak',
   'islandLabel', 'islandText', 'islandPill', 'islandPreview', 'btnIslandShow',
   'setAlertBlink', 'setAlertDist', 'setAlertLight', 'setAlertBreak',
@@ -239,6 +241,16 @@ export function applyBigTargets() {
   }
 }
 
+export function updateModeUI() {
+  const mode = app.settings.controlMode === 'head' ? 'head' : 'eye';
+  $$('.mode-btn').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+  if (E.modePill) E.modePill.textContent = mode === 'head' ? '头部' : '眼控';
+  if (E.headConfig) E.headConfig.classList.toggle('on', mode === 'head');
+  if (E.headHHint) E.headHHint.textContent = `${app.settings.headH || 8}°`;
+  if (E.headVHint) E.headVHint.textContent = `${app.settings.headV || 5}°`;
+  if (E.headDeadHint) E.headDeadHint.textContent = `${app.settings.headDead || 44}px`;
+}
+
 export function updateAutoUI() {
   if (!E.autoPill) return;
   const n = app.settings.autoN || 0;
@@ -279,7 +291,9 @@ export function renderLive(frame, gaze, fps) {
   if (E.gazeStatePill) {
     let text = '等待视线';
     let cls = '';
+    const headMode = app.settings.controlMode === 'head';
     if (!frame || !frame.present) { text = app.mode === 'demo' ? '演示中' : '未检测到人脸'; cls = 'warn'; }
+    else if (headMode) { text = gaze.valid ? '头部控制中' : '头部待稳定'; cls = gaze.valid ? 'on' : 'warn'; }
     else if (!app.model) { text = '待校准'; cls = 'warn'; }
     else if (gaze.valid) { text = '视线已锁定'; cls = 'on'; }
     else { text = gazeReasonText[gaze.reason] || '视线不稳'; cls = gaze.reason === 'blink' ? '' : 'warn'; }
@@ -653,6 +667,9 @@ function applySettingsToForm() {
   E.setMirror.checked = !!s.mirror;
   E.setMesh.checked = !!s.mesh;
   E.setBig.checked = !!s.bigTargets;
+  if (E.setHeadH) E.setHeadH.value = String(s.headH || 8);
+  if (E.setHeadV) E.setHeadV.value = String(s.headV || 5);
+  if (E.setHeadDead) E.setHeadDead.value = String(s.headDead || 44);
   const isl = s.island || {};
   const items = isl.items || {};
   if (E.setIsland) E.setIsland.checked = isl.enabled !== false;
@@ -681,6 +698,7 @@ function applySettingsToForm() {
   applyBigTargets();
   updateOffsetUI();
   updateAutoUI();
+  updateModeUI();
 }
 
 export function applyMirror() {
@@ -774,6 +792,26 @@ function bindSettings() {
   }
   if (E.btnResetOffset) {
     E.btnResetOffset.addEventListener('click', () => actions.resetOffset && actions.resetOffset());
+  }
+  $$('.mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      actions.setControlMode && actions.setControlMode(btn.dataset.mode);
+    });
+  });
+  const headSlider = (el, hint, key, unit) => {
+    if (!el) return;
+    el.addEventListener('input', () => {
+      if (hint) hint.textContent = `${el.value}${unit}`;
+    });
+    el.addEventListener('change', () => {
+      patch({ [key]: Number(el.value) });
+    });
+  };
+  headSlider(E.setHeadH, E.headHHint, 'headH', '°');
+  headSlider(E.setHeadV, E.headVHint, 'headV', '°');
+  headSlider(E.setHeadDead, E.headDeadHint, 'headDead', 'px');
+  if (E.btnRecenter) {
+    E.btnRecenter.addEventListener('click', () => actions.recenterHead && actions.recenterHead(false));
   }
   if (E.btnResetAuto) {
     E.btnResetAuto.addEventListener('click', () => actions.resetAutoOffset && actions.resetAutoOffset());
@@ -924,7 +962,9 @@ Object.assign(ui, {
   applyBigTargets,
   updateOffsetUI,
   updateAutoUI,
+  updateModeUI,
   startAlign,
+  toast,
   appendChat,
   showReport,
   calibrationEls,

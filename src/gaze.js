@@ -30,6 +30,36 @@ export class GazeTracker {
     // 使用中自校准：每次“注视点击”都提供了一个我们知道大致落点的样本，
     // 用它缓慢修正整体偏移，抵消头位变化带来的漂移。
     this.auto = { x: 0, y: 0, n: 0 };
+
+    /* ---- 头部控制模式（借鉴 visual_mouse 的思路）----
+       不用虹膜，直接用头部转角：整张脸的几何平均，噪声比虹膜小一个数量级。
+       角度 → 目标位置，再以「限速 + 死区」的方式把光标挪过去，
+       所以即使角度有噪声，光标也只是轻微改变速度，不会跳。 */
+    this.controlMode = 'eye';
+    this.head = { hRange: 8, vRange: 5, dead: 44, maxSpeed: 1100, tau: 0.09 };
+    this.headZero = { yaw: 0, pitch: 0 };
+    this.headPos = null;
+    this.headMoving = false;
+    this.headYaw = null;
+    this.headPitch = null;
+    // 头部角度是低频信号（人的转头 < 3Hz），截止频率压低，噪声基本走不动光标
+    this.hfx = new OneEuroFilter({ minCutoff: 1.0, beta: 0.006 });
+    this.hfy = new OneEuroFilter({ minCutoff: 1.0, beta: 0.006 });
+  }
+
+  setControlMode(mode) {
+    this.controlMode = mode === 'head' ? 'head' : 'eye';
+    this.reset();
+  }
+
+  setHeadConfig(cfg = {}) {
+    this.head = { ...this.head, ...cfg };
+  }
+
+  setHeadZero(yaw, pitch) {
+    this.headZero = { yaw: Number(yaw) || 0, pitch: Number(pitch) || 0 };
+    this.headPos = null;
+    this.headMoving = false;
   }
 
   setAuto(x, y, n = 0) {
@@ -45,6 +75,88 @@ export class GazeTracker {
    * 用一次已知落点修正整体偏移：target 是用户注视目标的屏幕坐标。
    * 残差过大（说明看的是别处或识别跳点）直接丢弃；修正量做 EMA，避免单次抖动带偏。
    */
+  /**
+   * 头部模式：头部角度 → 屏幕目标位置，再用「限速 + 死区」逼近。
+   * 角度噪声只会改变逼近速度，不会让光标跳到别处，所以静止时纹丝不动。
+   */
+  updateHead(frame, now) {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const dt = this.prevT ? Math.min(0.2, (now - this.prevT) / 1000) : 1 / 30;
+    this.prevT = now;
+
+    const open = frame.open == null ? 1 : frame.open;
+    if (open < 0.32) {
+      this.gaze = { ...this.gaze, valid: false, confidence: 0, ts: now, reason: 'blink' };
+      this.onGaze(this.gaze);
+      return this.gaze;
+    }
+
+    const rawYaw = Number.isFinite(frame.yawDeg) ? frame.yawDeg : 0;
+    const rawPitch = Number.isFinite(frame.pitchDeg) ? frame.pitchDeg : 0;
+    this.headYaw = this.hfx.filter(rawYaw, dt);
+    this.headPitch = this.hfy.filter(rawPitch, dt);
+
+    const yaw = this.headYaw - this.headZero.yaw;
+    const pitch = this.headPitch - this.headZero.pitch;
+
+    const hRange = Math.max(2, this.head.hRange);
+    const vRange = Math.max(1.5, this.head.vRange);
+    // 左转（yaw>0）→ 光标左移；低头（pitch>0）→ 光标下移
+    const nx = clamp(0.5 - yaw / (2 * hRange), 0, 1);
+    const ny = clamp(0.5 + pitch / (2 * vRange), 0, 1);
+
+    const margin = 8; // 屏幕边缘留一点，避免贴死
+    const tx = clamp(nx * vw, margin, vw - margin);
+    const ty = clamp(ny * vh, margin, vh - margin);
+
+    if (!this.headPos) this.headPos = { x: tx, y: ty };
+
+    const dx = tx - this.headPos.x;
+    const dy = ty - this.headPos.y;
+    const dist = Math.hypot(dx, dy);
+
+    // 死区带迟滞：离目标超过 dead 才开始动，进到 dead*0.35 就停，避免在边界来回蹭
+    if (!this.headMoving && dist > this.head.dead) this.headMoving = true;
+    if (this.headMoving && dist < this.head.dead * 0.35) this.headMoving = false;
+
+    if (this.headMoving) {
+      const k = 1 - Math.exp(-dt / Math.max(0.02, this.head.tau));
+      let stepX = dx * k;
+      let stepY = dy * k;
+      const maxStep = this.head.maxSpeed * dt;
+      const stepLen = Math.hypot(stepX, stepY);
+      if (stepLen > maxStep) {
+        const s = maxStep / stepLen;
+        stepX *= s;
+        stepY *= s;
+      }
+      this.headPos.x = clamp(this.headPos.x + stepX, 0, vw);
+      this.headPos.y = clamp(this.headPos.y + stepY, 0, vh);
+    }
+
+    this.gaze = {
+      x: this.headPos.x,
+      y: this.headPos.y,
+      nx: this.headPos.x / vw,
+      ny: this.headPos.y / vh,
+      rawX: this.headPos.x,
+      rawY: this.headPos.y,
+      predX: nx,
+      predY: ny,
+      valid: true,
+      confidence: 0.92,
+      outside: false,
+      open,
+      ts: now,
+      reason: 'head',
+      headYaw: yaw,
+      headPitch: pitch,
+    };
+    this.onGaze(this.gaze);
+    return this.gaze;
+  }
+
   observeAnchor(tx, ty) {
     const g = this.gaze;
     if (!g || !g.valid || !Number.isFinite(tx) || !Number.isFinite(ty)) return false;
@@ -87,6 +199,12 @@ export class GazeTracker {
     this.goodAt = 0;
     this.beyondSince = 0;
     this.shown = null;
+    this.headPos = null;
+    this.headMoving = false;
+    this.headYaw = null;
+    this.headPitch = null;
+    this.hfx.reset();
+    this.hfy.reset();
   }
 
   update(frame) {
@@ -102,6 +220,8 @@ export class GazeTracker {
       return this.gaze;
     }
     this.miss = 0;
+
+    if (this.controlMode === 'head') return this.updateHead(frame, now);
 
     if (!this.model) {
       this.gaze = { ...last, valid: false, confidence: 0, ts: now, reason: 'uncalibrated' };
