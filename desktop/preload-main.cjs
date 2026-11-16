@@ -11,5 +11,9 @@ contextBridge.exposeInMainWorld('eyePilotDesktop', {
     setVisible: (v) => ipcRenderer.send('island:visibility', !!v),
     toggle: () => ipcRenderer.send('island:toggle'),
   },
+  cursor: {
+    // 归一化屏幕坐标 → 主进程用系统 API 移动真实光标
+    set: (nx, ny) => ipcRenderer.send('cursor:move', nx, ny),
+  },
   quit: () => ipcRenderer.send('app:quit'),
 });

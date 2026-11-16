@@ -221,9 +221,8 @@ function createWindow() {
 
 /* ---------------- 灵动岛 ---------------- */
 
-const ISLAND_WIDTH = 400;
-const ISLAND_COLLAPSED = 54;
-const ISLAND_EXPANDED = 396;
+const ISLAND_WIDTH = 300;
+const ISLAND_COLLAPSED = 42;
 
 function islandPosition(w, y) {
   const d = screen.getPrimaryDisplay();
@@ -283,6 +282,51 @@ function toggleIsland() {
   else islandWindow.showInactive();
 }
 
+/* ---------------- 系统光标（程序外接管） ---------------- */
+
+let nut = null;
+let cursorBusy = false;
+let cursorPending = null;
+
+function ensureNut() {
+  if (nut !== undefined && nut !== null) return nut;
+  try {
+    // eslint-disable-next-line global-require
+    nut = require('@nut-tree-fork/nut-js');
+  } catch (err) {
+    console.warn('[EyePilot] 系统光标模块不可用：', err.message);
+    nut = null;
+  }
+  return nut;
+}
+
+function pumpCursor() {
+  const n = ensureNut();
+  if (!n) return;
+  if (cursorBusy) return;
+  cursorBusy = true;
+  (async () => {
+    while (cursorPending) {
+      const p = cursorPending;
+      cursorPending = null;
+      try {
+        await n.mouse.setPosition(new n.Point(p.x, p.y));
+      } catch { /* 忽略单次失败 */ }
+    }
+    cursorBusy = false;
+  })();
+}
+
+ipcMain.on('cursor:move', (_e, nx, ny) => {
+  const d = screen.getPrimaryDisplay();
+  // Electron 给的是 DIP，原生模块用的是物理像素，缩放不是 100% 时必须乘 scaleFactor
+  const s = d.scaleFactor || 1;
+  const x = Math.round((d.workArea.x + Math.max(0, Math.min(1, Number(nx))) * d.workArea.width) * s);
+  const y = Math.round((d.workArea.y + Math.max(0, Math.min(1, Number(ny))) * d.workArea.height) * s);
+  cursorPending = { x, y };
+  pumpCursor();
+});
+
 /* ---------------- 托盘 ---------------- */
 
 function sendAction(name) {
@@ -315,6 +359,16 @@ function createTray() {
     { label: '五点精细对齐', click: () => sendAction('refine') },
     { label: '打开设置', click: () => sendAction('settings') },
     { label: '暂停 / 恢复眼控点击', click: () => sendAction('toggle-pause') },
+    {
+      label: '控制方式',
+      submenu: [
+        { label: '眼控（虹膜）', click: () => sendAction('mode:eye') },
+        { label: '混合（头 + 眼）', click: () => sendAction('mode:hybrid') },
+        { label: '头部（免校准）', click: () => sendAction('mode:head') },
+        { label: '仅鼠标', click: () => sendAction('mode:mouse') },
+      ],
+    },
+    { label: '护眼训练', click: () => sendAction('eyecare') },
     { type: 'separator' },
     { label: '显示 / 隐藏灵动岛', click: () => toggleIsland() },
     { type: 'separator' },

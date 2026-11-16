@@ -36,8 +36,9 @@ const ids = [
   'setCamera', 'setDwell', 'valDwell', 'setClickMode', 'setSmooth', 'valSmooth',
   'setMirror', 'setMesh', 'setBig', 'offsetPill', 'btnCenterOffset', 'btnResetOffset',
   'autoPill', 'btnResetAuto',
-  'modePill', 'headConfig', 'setHeadH', 'setHeadV', 'setHeadDead',
-  'headHHint', 'headVHint', 'headDeadHint', 'btnRecenter',
+  'modePill', 'headConfig', 'setHeadH', 'setHeadV', 'setHeadDead', 'setHybrid',
+  'headHHint', 'headVHint', 'headDeadHint', 'hybridHint', 'hybridRow', 'modeHint',
+  'btnRecenter', 'setSystemCursor',
   'setIsland', 'isBlink', 'isSession', 'isFatigue', 'isHealth', 'isBreak',
   'islandLabel', 'islandText', 'islandPill', 'islandPreview', 'btnIslandShow',
   'setAlertBlink', 'setAlertDist', 'setAlertLight', 'setAlertBreak',
@@ -46,6 +47,8 @@ const ids = [
   'calResultTitle', 'calResultText', 'calResultMetrics', 'calIntro', 'calCountdown',
   'calBrand', 'calEyebrow', 'calIntroText',
   'calPreview', 'calFace', 'calClose', 'btnCalFinish', 'btnCalRetry',
+  'careIndex', 'careName', 'careDesc', 'careArc', 'careCount', 'careList',
+  'btnCarePrev', 'btnCarePlay', 'btnCareNext',
   'breakOverlay', 'breakCount', 'breakTrackBar', 'btnBreakDone', 'btnBreakSkip', 'breakFine',
   'alignOverlay', 'alignCount', 'alignCancel', 'alignTitle', 'alignHint', 'alignTarget',
 ];
@@ -58,6 +61,7 @@ export const ui = {
     bindTopbar();
     bindOnboard();
     bindSettings();
+    bindCare();
     bindAlign();
     bindCalibration();
     bindBreak();
@@ -242,13 +246,26 @@ export function applyBigTargets() {
 }
 
 export function updateModeUI() {
-  const mode = app.settings.controlMode === 'head' ? 'head' : 'eye';
+  const mode = ['eye', 'hybrid', 'head', 'mouse'].includes(app.settings.controlMode)
+    ? app.settings.controlMode : 'eye';
   $$('.mode-btn').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
-  if (E.modePill) E.modePill.textContent = mode === 'head' ? '头部' : '眼控';
-  if (E.headConfig) E.headConfig.classList.toggle('on', mode === 'head');
+  const label = { eye: '眼控', hybrid: '混合', head: '头部', mouse: '鼠标' }[mode];
+  if (E.modePill) E.modePill.textContent = label;
+  const hint = {
+    eye: '眼控读虹膜，最精细，需要校准；头动后可五点对齐或自校准。',
+    hybrid: '头部负责粗定位，虹膜只在精修范围内微调：不抖，也不用大幅转头。',
+    head: '只读头部转角，免校准、静止不抖；用转头移动光标。',
+    mouse: '暂停眼控与注视点击，护眼监测继续；用鼠标正常操作。',
+  }[mode];
+  if (E.modeHint) E.modeHint.textContent = hint;
+
+  const needHead = mode === 'head' || mode === 'hybrid';
+  if (E.headConfig) E.headConfig.classList.toggle('on', needHead);
+  if (E.hybridRow) E.hybridRow.style.display = mode === 'hybrid' ? '' : 'none';
   if (E.headHHint) E.headHHint.textContent = `${app.settings.headH || 8}°`;
   if (E.headVHint) E.headVHint.textContent = `${app.settings.headV || 5}°`;
   if (E.headDeadHint) E.headDeadHint.textContent = `${app.settings.headDead || 44}px`;
+  if (E.hybridHint) E.hybridHint.textContent = `${app.settings.hybridRange || 110}px`;
 }
 
 export function updateAutoUI() {
@@ -506,6 +523,109 @@ export function calibrationEls() {
   };
 }
 
+
+/* ---------------- 护眼训练 ---------------- */
+
+const CARE_STEPS = [
+  { name: '揉攒竹', desc: '双拇指按在眉头内侧凹陷处，轻轻打圈。酸胀即可，别用力压。' },
+  { name: '按睛明', desc: '拇指指尖按在内眼角稍上方的凹陷，向上轻顶，停留 2 秒再松。' },
+  { name: '揉四白', desc: '食指按在眼眶下缘中点（瞳孔正下方），轻轻打圈。' },
+  { name: '按太阳穴', desc: '拇指按太阳穴，其余四指微弯，轻揉。' },
+  { name: '刮眼眶', desc: '食指中节贴在眼眶上缘，从内向外轻刮，上下眶各一遍。' },
+  { name: '远眺眨眼', desc: '抬头看 6 米外，做 10 次「用力闭眼 1 秒再睁开」。' },
+];
+
+const CARE_SECONDS = 20;
+const CARE_CIRC = 2 * Math.PI * 52;
+
+let careIndex = 0;
+let careLeft = CARE_SECONDS;
+let careTimer = 0;
+let careRunning = false;
+
+function paintCare() {
+  const step = CARE_STEPS[careIndex];
+  if (E.careIndex) E.careIndex.textContent = `${String(careIndex + 1).padStart(2, '0')} / ${String(CARE_STEPS.length).padStart(2, '0')}`;
+  if (E.careName) E.careName.textContent = step.name;
+  if (E.careDesc) E.careDesc.textContent = step.desc;
+  if (E.careCount) E.careCount.textContent = String(careLeft);
+  if (E.careArc) {
+    E.careArc.style.strokeDasharray = String(CARE_CIRC);
+    E.careArc.style.strokeDashoffset = String(CARE_CIRC * (1 - careLeft / CARE_SECONDS));
+  }
+  if (E.careList) {
+    $$('.care-item', E.careList).forEach((el, i) => el.classList.toggle('on', i === careIndex));
+  }
+  if (E.btnCarePlay) E.btnCarePlay.textContent = careRunning ? '暂停' : (careLeft === 0 ? '重新开始' : '开始');
+}
+
+function stopCare() {
+  careRunning = false;
+  clearInterval(careTimer);
+  careTimer = 0;
+  paintCare();
+}
+
+function startCare() {
+  if (careRunning) { stopCare(); return; }
+  if (careLeft <= 0) careLeft = CARE_SECONDS;
+  careRunning = true;
+  paintCare();
+  careTimer = setInterval(() => {
+    careLeft--;
+    if (careLeft <= 0) {
+      careLeft = 0;
+      clearInterval(careTimer);
+      careTimer = 0;
+      careRunning = false;
+      beep('good');
+      if (careIndex < CARE_STEPS.length - 1) {
+        setTimeout(() => {
+          careIndex++;
+          careLeft = CARE_SECONDS;
+          paintCare();
+        }, 700);
+      } else {
+        paintCare();
+        toast('六节做完了', '起身喝口水，顺便看向窗外 20 秒', 'good', 5000);
+      }
+    }
+    paintCare();
+  }, 1000);
+}
+
+function goCare(delta) {
+  stopCare();
+  careIndex = Math.max(0, Math.min(CARE_STEPS.length - 1, careIndex + delta));
+  careLeft = CARE_SECONDS;
+  paintCare();
+}
+
+function renderCareList() {
+  if (!E.careList) return;
+  E.careList.innerHTML = CARE_STEPS.map((s, i) => `
+    <button class="care-item${i === 0 ? ' on' : ''}" data-care="${i}" data-gaze>
+      <b>${String(i + 1).padStart(2, '0')}</b>
+      <div><strong>${s.name}</strong><small>${s.desc}</small></div>
+    </button>`).join('');
+  $$('.care-item', E.careList).forEach((el) => {
+    el.addEventListener('click', () => {
+      stopCare();
+      careIndex = Number(el.dataset.care) || 0;
+      careLeft = CARE_SECONDS;
+      paintCare();
+    });
+  });
+}
+
+function bindCare() {
+  renderCareList();
+  paintCare();
+  if (E.btnCarePlay) E.btnCarePlay.addEventListener('click', startCare);
+  if (E.btnCarePrev) E.btnCarePrev.addEventListener('click', () => goCare(-1));
+  if (E.btnCareNext) E.btnCareNext.addEventListener('click', () => goCare(1));
+}
+
 /* ---------------- 视线对齐 ---------------- */
 
 const ALIGN_STEPS = [
@@ -670,6 +790,8 @@ function applySettingsToForm() {
   if (E.setHeadH) E.setHeadH.value = String(s.headH || 8);
   if (E.setHeadV) E.setHeadV.value = String(s.headV || 5);
   if (E.setHeadDead) E.setHeadDead.value = String(s.headDead || 44);
+  if (E.setHybrid) E.setHybrid.value = String(s.hybridRange || 110);
+  if (E.setSystemCursor) E.setSystemCursor.checked = !!s.systemCursor;
   const isl = s.island || {};
   const items = isl.items || {};
   if (E.setIsland) E.setIsland.checked = isl.enabled !== false;
@@ -810,6 +932,15 @@ function bindSettings() {
   headSlider(E.setHeadH, E.headHHint, 'headH', '°');
   headSlider(E.setHeadV, E.headVHint, 'headV', '°');
   headSlider(E.setHeadDead, E.headDeadHint, 'headDead', 'px');
+  headSlider(E.setHybrid, E.hybridHint, 'hybridRange', 'px');
+  if (E.setSystemCursor) {
+    E.setSystemCursor.addEventListener('change', () => {
+      patch({ systemCursor: E.setSystemCursor.checked });
+      if (E.setSystemCursor.checked && !window.eyePilotDesktop) {
+        toast('网页版无法接管系统鼠标', '桌面版（EyePilot.exe）才支持程序外控制', 'warn', 4500);
+      }
+    });
+  }
   if (E.btnRecenter) {
     E.btnRecenter.addEventListener('click', () => actions.recenterHead && actions.recenterHead(false));
   }

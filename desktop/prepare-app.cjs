@@ -34,13 +34,28 @@ for (const file of ['main.cjs', 'preload-main.cjs', 'preload-island.cjs']) {
 const icon = path.join(__dirname, 'icon.ico');
 if (fs.existsSync(icon)) fs.copyFileSync(icon, path.join(out, 'icon.ico'));
 
+const runtimeDeps = pkg.dependencies || {};
 fs.writeFileSync(path.join(out, 'package.json'), JSON.stringify({
   name: 'EyePilot',
   productName: 'EyePilot',
-  version: pkg.version || '1.0.1',
+  version: pkg.version || '1.3.0',
   description: 'EyePilot · 瞳行 — AI 眼控与用眼健康助手',
   main: 'main.cjs',
+  dependencies: runtimeDeps,
 }, null, 2));
+
+// 原生模块（系统光标）不能打进 asar，所以这里把生产依赖装到 app 目录里
+if (Object.keys(runtimeDeps).length) {
+  const { execFileSync } = require('node:child_process');
+  try {
+    execFileSync('npm', ['install', '--omit=dev', '--no-audit', '--no-fund'], {
+      cwd: out, stdio: 'inherit', shell: true,
+    });
+    console.log('[prepare] runtime deps installed');
+  } catch (err) {
+    console.warn('[prepare] 依赖安装失败，系统光标功能将不可用：', err.message);
+  }
+}
 
 let files = 0;
 let bytes = 0;

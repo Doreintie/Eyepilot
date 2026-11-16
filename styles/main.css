@@ -295,7 +295,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 }
 .tile-grid {
   position: relative; z-index: 2;
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;
   padding: 20px 20px 8px;
   flex: 1;
   min-height: 0;
@@ -998,7 +998,7 @@ input[type="range"]::-webkit-slider-thumb {
 .pipe-step p { font-size: 11px; color: var(--muted); line-height: 1.65; }
 
 .roadmap-card { margin-top: 14px; }
-.roadmap-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.roadmap-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .roadmap-grid > div { padding: 12px 14px; border-radius: 13px; background: var(--panel-2); border: 1px solid var(--line); }
 .roadmap-grid b { font-size: 12.5px; }
 .roadmap-grid p { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.65; }
@@ -1007,3 +1007,83 @@ input[type="range"]::-webkit-slider-thumb {
   .pipe-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .roadmap-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+
+/* ===================== 护眼训练 ===================== */
+
+.care-grid { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr); gap: 14px; align-items: start; }
+.care-player { padding: 0; overflow: hidden; }
+.care-stage { padding: 26px 24px 18px; text-align: center; }
+.care-index { font-family: var(--mono); font-size: 10px; letter-spacing: .2em; color: var(--accent); }
+.care-stage h2 { font-size: 26px; margin: 8px 0 8px; letter-spacing: -.02em; }
+.care-stage > p { color: var(--muted); font-size: 12.5px; line-height: 1.75; max-width: 400px; margin: 0 auto; min-height: 44px; }
+.care-ring { position: relative; width: 148px; height: 148px; margin: 16px auto 4px; }
+.care-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.care-ring circle { fill: none; stroke-width: 3; }
+.care-ring .track { stroke: var(--line-2); }
+.care-ring .arc { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 326.7; stroke-dashoffset: 0; }
+.care-ring b { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-size: 40px; font-weight: 500; letter-spacing: -.03em; }
+.care-actions { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+.care-player .fine { text-align: center; padding: 0 24px 16px; margin: 0; }
+.care-list { display: flex; flex-direction: column; gap: 3px; }
+.care-item {
+  display: flex; gap: 10px; align-items: flex-start; padding: 9px 10px;
+  border-radius: var(--r-sm); cursor: pointer; text-align: left; font-family: inherit;
+  background: transparent; border: 1px solid transparent; color: inherit;
+  transition: background .18s, border-color .18s;
+}
+.care-item:hover { background: var(--panel-2); }
+.care-item.on { background: color-mix(in srgb, var(--accent) 8%, var(--panel-2)); border-color: color-mix(in srgb, var(--accent) 26%, transparent); }
+.care-item b { font-family: var(--mono); font-size: 10px; color: var(--accent); padding-top: 2px; flex: none; }
+.care-item div { min-width: 0; }
+.care-item strong { display: block; font-size: 12.5px; font-weight: 600; }
+.care-item small { display: block; font-size: 11px; color: var(--muted); line-height: 1.6; margin-top: 2px; }
+.care-tips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+@media (max-width: 1180px) {
+  .care-grid { grid-template-columns: minmax(0, 1fr); }
+  .care-tips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ===================== v1.3 视觉：更克制的战术终端风 ===================== */
+
+:root {
+  --r-sm: 5px;
+  --r-md: 7px;
+  --r-lg: 9px;
+  --r-xl: 12px;
+}
+:root[data-theme="dark"] {
+  --bg: #05070a;
+  --bg-grad: radial-gradient(900px 520px at 12% -14%, rgba(46, 230, 214, .07), transparent 62%), #05070a;
+  --panel: #0a0f16;
+  --panel-2: #0e141d;
+  --panel-3: #131b26;
+  --line: rgba(255, 255, 255, .06);
+  --line-2: rgba(255, 255, 255, .12);
+  --shadow: 0 18px 44px -34px rgba(0, 0, 0, .95);
+}
+:root[data-theme="light"] {
+  --bg: #f2f5fa;
+  --bg-grad: #f2f5fa;
+}
+
+/* 标题：左侧竖线，像终端里的区块标记 */
+.card-head h3 { padding-left: 9px; border-left: 2px solid var(--accent); line-height: 1.15; }
+.view-head h1 { letter-spacing: -.03em; }
+.eyebrow { letter-spacing: .22em; }
+
+/* 胶囊与按钮：收掉圆润感 */
+.pill { border-radius: 3px; letter-spacing: .03em; }
+.btn { border-radius: 4px; }
+.icon-btn { border-radius: 4px; }
+.tile { border-radius: 6px; }
+.rail-btn { border-radius: 5px; }
+.rail-btn.active { background: transparent; border-color: transparent; }
+.rail-btn.active::before { width: 2px; height: 26px; border-radius: 0; left: -12px; }
+.stage-card, .card { box-shadow: none; }
+
+/* 磁贴：去掉彩色光斑，改为边框强调 */
+.tile-ghost { opacity: .04; }
+.tile:hover .tile-ghost, .tile.is-target .tile-ghost { opacity: .09; }
+.tile.is-target { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.stage-glow { opacity: .45; }

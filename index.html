@@ -52,6 +52,10 @@
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>
         <span>控制台</span>
       </button>
+      <button class="rail-btn" data-view="eyecare" data-gaze>
+        <svg viewBox="0 0 24 24"><path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>护眼</span>
+      </button>
       <button class="rail-btn" data-view="health" data-gaze>
         <svg viewBox="0 0 24 24"><path d="M3 12.5h4l2.2-5.5 3.2 11 2.6-7 1.8 3.5H21"/></svg>
         <span>用眼健康</span>
@@ -93,26 +97,12 @@
           <div class="stage" id="stage">
             <div class="stage-glow"></div>
             <div class="tile-grid" id="tileGrid">
-              <button class="tile" data-gaze data-open-plugin="reader">
+              <button class="tile" data-gaze data-nav="eyecare">
                 <span class="tile-ico">
-                  <svg viewBox="0 0 24 24"><path d="M4 5.5c2.8-1.2 5.5-1.2 8 0 2.5-1.2 5.2-1.2 8 0v13c-2.8-1.2-5.5-1.2-8 0-2.5-1.2-5.2-1.2-8 0v-13Z"/><path d="M12 5.8v12.5"/></svg>
+                  <svg viewBox="0 0 24 24"><path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12Z"/><circle cx="12" cy="12" r="3"/></svg>
                 </span>
-                <span class="tile-t">眼控阅读</span>
-                <span class="tile-s">注视下沿自动滚动</span>
-              </button>
-              <button class="tile" data-gaze data-open-plugin="game">
-                <span class="tile-ico">
-                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.4"/><path d="M12 3.5v4M12 16.5v4M3.5 12h4M16.5 12h4"/></svg>
-                </span>
-                <span class="tile-t">眼控训练</span>
-                <span class="tile-s">60 秒反应力小游戏</span>
-              </button>
-              <button class="tile" data-gaze data-open-plugin="focus">
-                <span class="tile-ico">
-                  <svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4.5l3 1.8M9 2.5h6"/></svg>
-                </span>
-                <span class="tile-t">专注番茄钟</span>
-                <span class="tile-s">走神即提醒</span>
+                <span class="tile-t">护眼训练</span>
+                <span class="tile-s">六节眼保健操 · 2 分钟</span>
               </button>
               <button class="tile" data-gaze data-nav="health">
                 <span class="tile-ico">
@@ -221,6 +211,49 @@
             </div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ============ 护眼 ============ -->
+    <section class="view" data-view="eyecare">
+      <div class="view-head">
+        <div>
+          <h1>护眼训练</h1>
+          <p class="sub">跟着做一遍，比任何提醒都管用。每节 20 秒，全程 2 分钟。</p>
+        </div>
+        <span class="pill tiny">无需摄像头</span>
+      </div>
+
+      <div class="care-grid">
+        <div class="card care-player">
+          <div class="care-stage">
+            <span class="care-index" id="careIndex">01 / 06</span>
+            <h2 id="careName">揉攒竹</h2>
+            <p id="careDesc">双拇指按在眉头内侧凹陷处，轻轻打圈。</p>
+            <div class="care-ring">
+              <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52"/><circle class="arc" id="careArc" cx="60" cy="60" r="52"/></svg>
+              <b id="careCount">20</b>
+            </div>
+            <div class="care-actions">
+              <button class="btn ghost sm" id="btnCarePrev" data-gaze>上一节</button>
+              <button class="btn primary" id="btnCarePlay" data-gaze>开始</button>
+              <button class="btn ghost sm" id="btnCareNext" data-gaze>下一节</button>
+            </div>
+          </div>
+          <p class="fine">做的时候把眼镜摘掉；按压以酸胀不痛为准，别压眼球。</p>
+        </div>
+
+        <div class="card care-list-card">
+          <div class="card-head"><h3>六节眼保健操</h3><span class="pill tiny">循经按穴</span></div>
+          <div class="care-list" id="careList"></div>
+        </div>
+      </div>
+
+      <div class="care-tips">
+        <div class="card"><div class="card-head"><h3>20-20-20</h3></div><p class="body-text">每用眼 20 分钟，看 20 英尺（约 6 米）外 20 秒。本程序会在第 20 分钟弹远眺提示。</p></div>
+        <div class="card"><div class="card-head"><h3>距离与高度</h3></div><p class="body-text">屏幕距眼 50–65 cm，屏幕上沿略低于视线。太低会让人低头，太高会让眼球上翻。</p></div>
+        <div class="card"><div class="card-head"><h3>光线</h3></div><p class="body-text">环境光与屏幕亮度接近，别在暗房间里只看屏幕；背后不要有直射亮窗。</p></div>
+        <div class="card"><div class="card-head"><h3>眨眼训练</h3></div><p class="body-text">专注时眨眼频率会掉到 5–7 次/分。刻意做 10 次「用力闭眼 1 秒再睁开」，比滴眼药水更直接。</p></div>
       </div>
     </section>
 
@@ -489,18 +522,25 @@
           <div class="card-head"><h3>控制方式</h3><span class="pill tiny" id="modePill">眼控</span></div>
           <p class="body-text">眼控读虹膜，精细但要校准、对头位敏感；<b>头部模式只读头部转角</b>，极稳、免校准，代价是要用转头来移动光标。</p>
           <div class="mode-switch">
-            <button class="mode-btn on" data-mode="eye" data-gaze>眼控模式</button>
-            <button class="mode-btn" data-mode="head" data-gaze>头部模式</button>
+            <button class="mode-btn on" data-mode="eye" data-gaze>眼控</button>
+            <button class="mode-btn" data-mode="hybrid" data-gaze>混合</button>
+            <button class="mode-btn" data-mode="head" data-gaze>头部</button>
+            <button class="mode-btn" data-mode="mouse" data-gaze>鼠标</button>
           </div>
+          <p class="fine" id="modeHint">眼控读虹膜，最精细，需要校准。</p>
           <div class="head-config" id="headConfig">
             <label class="range-row"><span>水平范围</span><input type="range" id="setHeadH" min="4" max="16" step="1" value="8" /><b id="headHHint">8°</b></label>
             <label class="range-row"><span>垂直范围</span><input type="range" id="setHeadV" min="3" max="12" step="1" value="5" /><b id="headVHint">5°</b></label>
             <label class="range-row"><span>死区</span><input type="range" id="setHeadDead" min="10" max="80" step="2" value="44" /><b id="headDeadHint">44px</b></label>
+            <label class="range-row" id="hybridRow"><span>精修范围</span><input type="range" id="setHybrid" min="40" max="260" step="10" value="110" /><b id="hybridHint">110px</b></label>
             <div class="row-between">
-              <span class="fine">范围越小，需要的转头幅度越小；死区越大越稳、但更黏。</span>
+              <span class="fine">范围越小转头越省力；死区越大越稳；精修范围决定虹膜能“拉”动多少。</span>
               <button class="btn ghost sm" id="btnRecenter" data-gaze>重新归中</button>
             </div>
           </div>
+          <label class="switch-row">接管系统鼠标（离开本程序也能用）
+            <input type="checkbox" id="setSystemCursor" /><i class="switch"></i>
+          </label>
         </div>
 
         <div class="card">
@@ -568,7 +608,7 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.2.0</span></div>
+          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.3.0</span></div>
           <p class="body-text">EyePilot · 瞳行，校园黑客松参赛作品。技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移特征 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件，普通笔记本摄像头即可运行。</p>
           <p class="fine">本作品不构成医疗建议。若持续眼干、眼痛或视力模糊，请就医。</p>
         </div>

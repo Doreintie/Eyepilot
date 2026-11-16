@@ -21,6 +21,9 @@ export const DEFAULT_SETTINGS = {
   headH: 8,
   headV: 5,
   headDead: 44,
+  hybridRange: 110,
+  hybridDead: 12,
+  systemCursor: false,
   headZeroYaw: 0,
   headZeroPitch: 0,
   // 灵动岛（桌面版为独立悬浮窗，网页版只做预览）

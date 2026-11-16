@@ -5,7 +5,7 @@
 AI 眼动交互 + 用眼健康监测的桌面 Web 应用。不需要 Tobii 之类的红外眼动仪，笔记本自带的摄像头就够；所有画面在本机浏览器里处理，不上传。
 
 > 校园黑客松参赛作品 · 主题「AI + 眼动交互 / 视觉健康」
-> **当前版本 v1.2.0** · [更新记录](CHANGELOG.md)
+> **当前版本 v1.3.0** · [更新记录](CHANGELOG.md)
 
 ---
 
@@ -42,7 +42,7 @@ AI 眼动交互 + 用眼健康监测的桌面 Web 应用。不需要 Tobii 之�
 | 体积 | 约 148 MB（自带 Chromium） | 约 21 MB（用系统浏览器） |
 | 适合 | 答辩现场、自己电脑 | 微信/QQ 传给别人、快速体验 |
 
-两个包都在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 里：`EyePilot-Desktop-v1.2.0-win64.zip` / `EyePilot-Demo-v1.2.0-win64.zip`。
+两个包都在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 里：`EyePilot-Desktop-v1.3.0-win64.zip` / `EyePilot-Demo-v1.3.0-win64.zip`。
 
 **网页版**自带官方 Python 便携运行时（`runtime/`），收件人不需要安装 Python；系统里已有 Python 也会自动复用。
 
@@ -88,16 +88,19 @@ python serve.py            # 自动打开浏览器；加 --no-open 可关闭
 
 ---
 
-## 两种控制方式（v1.2.0）
+## 四种控制方式（v1.3.0）
 
-| | 眼控模式 | 头部模式 |
-| --- | --- | --- |
-| 信号来源 | 虹膜相对眼角的位移 | 头部转角（脸侧 234/454、额头/下巴的 z 差） |
-| 需要校准 | 是（9 点 / 16 点） | **否**，只需「归中」 |
-| 精度 | 高（可达 1–3°），适合点小目标 | 中（默认 ±8° 覆盖全屏），适合大按钮 |
-| 稳定性 | 依赖平滑与死区，静止时约 2–4px | **静止时 0px**（44px 死区 + 1Hz 低通） |
-| 对头位变化 | 敏感，需要五点对齐或自校准 | 天然免疫——它读的就是头 |
-| 适合 | 长时间轻度操作、无障碍输入 | 演示、手不方便、追求“不抖” |
+| | 眼控 | 混合（推荐） | 头部 | 仅鼠标 |
+| --- | --- | --- | --- | --- |
+| 信号来源 | 虹膜相对眼角 | 头部转角 + 虹膜残差 | 头部转角 | — |
+| 需要校准 | 是（9/16 点） | 头像不用，虹膜要 | **否** | — |
+| 精度 | 高，适合小目标 | 高，且残差被限制在 ±110px | 中（±8° 全屏） | — |
+| 静止抖动 | 约 3–5px | **0px**（头不动时） | **0px** | — |
+| 头位变化 | 敏感 | 天然跟随 | 天然跟随 | — |
+| 适合 | 无障碍输入 | 日常使用、答辩演示 | 追求绝对不抖 | 临时退出眼控 |
+
+> 混合模式的做法：头部给出目标位置，虹膜只在 ±110px 内微调。
+> 这样既不像纯眼控那样抖，也不用像纯头部那样大幅转头。
 
 头部模式的做法来自开源项目 [visual_mouse](https://github.com/yang999876/visual_mouse)：
 角度直接映射目标位置，再用「限速 + 死区」逼近，所以角度噪声只会改变移动速度，不会让光标跳。
@@ -290,7 +293,7 @@ eyepilot/
 
 两个打包产物体积超过 Git 仓库的常规范围，不随源码提交，放在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 附件里。按对方情况选一个发：
 
-**1. 桌面版 `EyePilot-Desktop-v1.2.0-win64.zip`（约 148 MB）**
+**1. 桌面版 `EyePilot-Desktop-v1.3.0-win64.zip`（约 148 MB）**
 
 - 解压后双击 `EyePilot.exe`，独立窗口运行，看不到浏览器地址栏。
 - 摄像头权限由应用自己处理，不会弹浏览器的权限框。
@@ -299,7 +302,7 @@ eyepilot/
   或右键压缩包 → 属性 → 勾选“解除锁定”再解压。
 - 微信若提示超过 100 MB，改用 QQ / 网盘发送，或发下面的网页版。
 
-**2. 网页版 `EyePilot-Demo-v1.2.0-win64.zip`（约 21 MB）**
+**2. 网页版 `EyePilot-Demo-v1.3.0-win64.zip`（约 21 MB）**
 
 - 解压后双击 `启动.bat`，会自动打开默认浏览器。
 - 自带 Python 运行时，无需安装、无需联网（模型已本地化）。
@@ -319,7 +322,7 @@ eyepilot/
 python serve.py
 ```
 
-需要“解压即用”的免安装包，请到 [Releases](https://github.com/Doreintie/Eyepilot/releases) 下载 `EyePilot-Demo-v1.2.0-win64.zip`。
+需要“解压即用”的免安装包，请到 [Releases](https://github.com/Doreintie/Eyepilot/releases) 下载 `EyePilot-Demo-v1.3.0-win64.zip`。
 
 ---
 

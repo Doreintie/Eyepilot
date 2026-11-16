@@ -36,19 +36,25 @@ export class GazeTracker {
        角度 → 目标位置，再以「限速 + 死区」的方式把光标挪过去，
        所以即使角度有噪声，光标也只是轻微改变速度，不会跳。 */
     this.controlMode = 'eye';
-    this.head = { hRange: 8, vRange: 5, dead: 44, maxSpeed: 1100, tau: 0.09 };
+    this.head = { hRange: 8, vRange: 5, dead: 44, maxSpeed: 1100, tau: 0.09, hybridRange: 110, hybridDead: 12, hybridTau: 0.18 };
     this.headZero = { yaw: 0, pitch: 0 };
     this.headPos = null;
     this.headMoving = false;
     this.headYaw = null;
     this.headPitch = null;
+    this.hybridDelta = null;
     // 头部角度是低频信号（人的转头 < 3Hz），截止频率压低，噪声基本走不动光标
     this.hfx = new OneEuroFilter({ minCutoff: 1.0, beta: 0.006 });
     this.hfy = new OneEuroFilter({ minCutoff: 1.0, beta: 0.006 });
+    // 混合模式里虹膜只提供残差，必须走和眼控一样的「中值 + 一欧元」，
+    // 否则残差本身的噪声会直接叠到头部定位上
+    this.irisBuf = [];
+    this.ifx = new OneEuroFilter({ minCutoff: 0.9, beta: 0.006 });
+    this.ify = new OneEuroFilter({ minCutoff: 0.9, beta: 0.006 });
   }
 
   setControlMode(mode) {
-    this.controlMode = mode === 'head' ? 'head' : 'eye';
+    this.controlMode = ['eye', 'hybrid', 'head', 'mouse'].includes(mode) ? mode : 'eye';
     this.reset();
   }
 
@@ -75,23 +81,10 @@ export class GazeTracker {
    * 用一次已知落点修正整体偏移：target 是用户注视目标的屏幕坐标。
    * 残差过大（说明看的是别处或识别跳点）直接丢弃；修正量做 EMA，避免单次抖动带偏。
    */
-  /**
-   * 头部模式：头部角度 → 屏幕目标位置，再用「限速 + 死区」逼近。
-   * 角度噪声只会改变逼近速度，不会让光标跳到别处，所以静止时纹丝不动。
-   */
-  updateHead(frame, now) {
+  /** 头部角度 → 屏幕目标点（含滤波、归中、灵敏度） */
+  headAim(frame, dt) {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const dt = this.prevT ? Math.min(0.2, (now - this.prevT) / 1000) : 1 / 30;
-    this.prevT = now;
-
-    const open = frame.open == null ? 1 : frame.open;
-    if (open < 0.32) {
-      this.gaze = { ...this.gaze, valid: false, confidence: 0, ts: now, reason: 'blink' };
-      this.onGaze(this.gaze);
-      return this.gaze;
-    }
-
     const rawYaw = Number.isFinite(frame.yawDeg) ? frame.yawDeg : 0;
     const rawPitch = Number.isFinite(frame.pitchDeg) ? frame.pitchDeg : 0;
     this.headYaw = this.hfx.filter(rawYaw, dt);
@@ -99,26 +92,63 @@ export class GazeTracker {
 
     const yaw = this.headYaw - this.headZero.yaw;
     const pitch = this.headPitch - this.headZero.pitch;
-
     const hRange = Math.max(2, this.head.hRange);
     const vRange = Math.max(1.5, this.head.vRange);
     // 左转（yaw>0）→ 光标左移；低头（pitch>0）→ 光标下移
     const nx = clamp(0.5 - yaw / (2 * hRange), 0, 1);
     const ny = clamp(0.5 + pitch / (2 * vRange), 0, 1);
+    const margin = 8;
+    return {
+      nx,
+      ny,
+      x: clamp(nx * vw, margin, vw - margin),
+      y: clamp(ny * vh, margin, vh - margin),
+      yaw,
+      pitch,
+    };
+  }
 
-    const margin = 8; // 屏幕边缘留一点，避免贴死
-    const tx = clamp(nx * vw, margin, vw - margin);
-    const ty = clamp(ny * vh, margin, vh - margin);
+  /** 虹膜模型的一手预测（含仿射校正与手动偏移），供眼控与混合模式共用 */
+  predictIris(frame) {
+    if (!this.model) return null;
+    const vec = buildFeatureVector(frame, this.model.degree || 1);
+    const pred = predictRidge(this.model, vec);
+    const calX = this.model.calX || { a: 1, b: 0 };
+    const calY = this.model.calY || { a: 1, b: 0 };
+    const legacy = this.model.bias || [0, 0];
+    const nx = this.model.calX ? calX.a * pred[0] + calX.b : pred[0] + legacy[0];
+    const ny = this.model.calY ? calY.a * pred[1] + calY.b : pred[1] + legacy[1];
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    return {
+      nx,
+      ny,
+      x: clamp(nx, 0, 1) * vw + this.offset.x + this.auto.x,
+      y: clamp(ny, 0, 1) * vh + this.offset.y + this.auto.y,
+      vec,
+    };
+  }
 
-    if (!this.headPos) this.headPos = { x: tx, y: ty };
+  /** 虹膜预测的轻量平滑（5 帧中值 + 一欧元） */
+  smoothIris(p, dt) {
+    this.irisBuf.push([p.x, p.y]);
+    if (this.irisBuf.length > 5) this.irisBuf.shift();
+    const xs = this.irisBuf.map((v) => v[0]).sort((a, b) => a - b);
+    const ys = this.irisBuf.map((v) => v[1]).sort((a, b) => a - b);
+    const mx = xs[Math.floor(xs.length / 2)];
+    const my = ys[Math.floor(ys.length / 2)];
+    return { x: this.ifx.filter(mx, dt), y: this.ify.filter(my, dt) };
+  }
 
-    const dx = tx - this.headPos.x;
-    const dy = ty - this.headPos.y;
+  /** 死区 + 限速的逼近，head / hybrid 共用 */
+  approach(target, dt, dead) {
+    if (!this.headPos) this.headPos = { x: target.x, y: target.y };
+    const dx = target.x - this.headPos.x;
+    const dy = target.y - this.headPos.y;
     const dist = Math.hypot(dx, dy);
 
-    // 死区带迟滞：离目标超过 dead 才开始动，进到 dead*0.35 就停，避免在边界来回蹭
-    if (!this.headMoving && dist > this.head.dead) this.headMoving = true;
-    if (this.headMoving && dist < this.head.dead * 0.35) this.headMoving = false;
+    if (!this.headMoving && dist > dead) this.headMoving = true;
+    if (this.headMoving && dist < dead * 0.35) this.headMoving = false;
 
     if (this.headMoving) {
       const k = 1 - Math.exp(-dt / Math.max(0.02, this.head.tau));
@@ -131,28 +161,94 @@ export class GazeTracker {
         stepX *= s;
         stepY *= s;
       }
-      this.headPos.x = clamp(this.headPos.x + stepX, 0, vw);
-      this.headPos.y = clamp(this.headPos.y + stepY, 0, vh);
+      this.headPos.x = clamp(this.headPos.x + stepX, 0, window.innerWidth);
+      this.headPos.y = clamp(this.headPos.y + stepY, 0, window.innerHeight);
     }
+    return this.headPos;
+  }
 
-    this.gaze = {
-      x: this.headPos.x,
-      y: this.headPos.y,
-      nx: this.headPos.x / vw,
-      ny: this.headPos.y / vh,
-      rawX: this.headPos.x,
-      rawY: this.headPos.y,
-      predX: nx,
-      predY: ny,
+  packageGaze(pos, now, frame, extra = {}) {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    return {
+      x: pos.x,
+      y: pos.y,
+      nx: pos.x / vw,
+      ny: pos.y / vh,
+      rawX: pos.x,
+      rawY: pos.y,
+      predX: pos.x / vw,
+      predY: pos.y / vh,
       valid: true,
       confidence: 0.92,
       outside: false,
-      open,
+      open: frame.open == null ? 1 : frame.open,
       ts: now,
-      reason: 'head',
-      headYaw: yaw,
-      headPitch: pitch,
+      ...extra,
     };
+  }
+
+  /**
+   * 头部模式：角度 → 目标位置，再限速逼近。角度噪声只改变速度，不改变位置。
+   */
+  updateHead(frame, now) {
+    const dt = this.prevT ? Math.min(0.2, (now - this.prevT) / 1000) : 1 / 30;
+    this.prevT = now;
+    const open = frame.open == null ? 1 : frame.open;
+    if (open < 0.32) {
+      this.gaze = { ...this.gaze, valid: false, confidence: 0, ts: now, reason: 'blink' };
+      this.onGaze(this.gaze);
+      return this.gaze;
+    }
+    const aim = this.headAim(frame, dt);
+    const pos = this.approach(aim, dt, this.head.dead);
+    this.gaze = this.packageGaze(pos, now, frame, { reason: 'head', headYaw: aim.yaw, headPitch: aim.pitch });
+    this.onGaze(this.gaze);
+    return this.gaze;
+  }
+
+  /**
+   * 混合模式：头部负责粗定位，虹膜只贡献 ±R 以内的残差。
+   * 即使虹膜模型很糟，最坏也只是偏 R 像素，而且会被限速抹平；
+   * 头部动得多、虹膜抖得凶，在这里正好互补。
+   */
+  updateHybrid(frame, now) {
+    const dt = this.prevT ? Math.min(0.2, (now - this.prevT) / 1000) : 1 / 30;
+    this.prevT = now;
+    const open = frame.open == null ? 1 : frame.open;
+    if (open < 0.32) {
+      this.gaze = { ...this.gaze, valid: false, confidence: 0, ts: now, reason: 'blink' };
+      this.onGaze(this.gaze);
+      return this.gaze;
+    }
+
+    const aim = this.headAim(frame, dt);
+    const iris = this.predictIris(frame);
+    const R = Math.max(20, this.head.hybridRange || 110);
+    let dx = 0;
+    let dy = 0;
+    if (iris) {
+      const s = this.smoothIris(iris, dt);
+      dx = clamp(s.x - aim.x, -R, R);
+      dy = clamp(s.y - aim.y, -R, R);
+    }
+    if (!this.hybridDelta) this.hybridDelta = { x: 0, y: 0 };
+    const k = 1 - Math.exp(-dt / Math.max(0.05, this.head.hybridTau || 0.18));
+    this.hybridDelta.x += (dx - this.hybridDelta.x) * k;
+    this.hybridDelta.y += (dy - this.hybridDelta.y) * k;
+
+    const target = {
+      x: clamp(aim.x + this.hybridDelta.x, 0, window.innerWidth),
+      y: clamp(aim.y + this.hybridDelta.y, 0, window.innerHeight),
+    };
+    const dead = this.head.hybridDead == null ? 12 : this.head.hybridDead;
+    const pos = this.approach(target, dt, dead);
+    this.gaze = this.packageGaze(pos, now, frame, {
+      reason: 'hybrid',
+      headYaw: aim.yaw,
+      headPitch: aim.pitch,
+      irisOk: !!iris,
+    });
     this.onGaze(this.gaze);
     return this.gaze;
   }
@@ -203,8 +299,15 @@ export class GazeTracker {
     this.headMoving = false;
     this.headYaw = null;
     this.headPitch = null;
+    this.hybridDelta = null;
+    this.irisBuf = [];
+    this.ifx.reset();
+    this.ify.reset();
     this.hfx.reset();
     this.hfy.reset();
+    this.irisBuf = [];
+    this.ifx.reset();
+    this.ify.reset();
   }
 
   update(frame) {
@@ -221,7 +324,13 @@ export class GazeTracker {
     }
     this.miss = 0;
 
+    if (this.controlMode === 'mouse') {
+      this.gaze = { ...this.gaze, valid: false, confidence: 0, ts: now, reason: 'mouse' };
+      this.onGaze(this.gaze);
+      return this.gaze;
+    }
     if (this.controlMode === 'head') return this.updateHead(frame, now);
+    if (this.controlMode === 'hybrid') return this.updateHybrid(frame, now);
 
     if (!this.model) {
       this.gaze = { ...last, valid: false, confidence: 0, ts: now, reason: 'uncalibrated' };

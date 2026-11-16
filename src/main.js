@@ -44,10 +44,27 @@ function afterFrame(frame, gaze) {
   // 校准器需要每一帧原始几何特征；之前漏了这一行，导致“样本太少”
   if (calibrator && calibrator.active) calibrator.pushFrame(frame);
   input.update(gaze, frame);
+  pushSystemCursor(gaze);
   health.ingest(frame, gaze);
   pluginHost.frame(frame, gaze);
   renderLive(frame, gaze, frame.fps);
   checkPoseDrift(frame);
+}
+
+/* ---------------- 系统光标 ---------------- */
+
+let lastCursorAt = 0;
+
+/** 打开“接管系统鼠标”后，把归一化视线送给主进程，用系统 API 移动真实光标 */
+function pushSystemCursor(gaze) {
+  const d = window.eyePilotDesktop;
+  if (!d || !d.cursor || !app.settings.systemCursor) return;
+  if (app.settings.controlMode === 'mouse') return;
+  if (!gaze || !gaze.valid) return;
+  const now = performance.now();
+  if (now - lastCursorAt < 30) return;
+  lastCursorAt = now;
+  d.cursor.set(gaze.nx, gaze.ny);
 }
 
 /* ---------------- 头位漂移提示 ---------------- */
@@ -60,7 +77,7 @@ let lastPoseWarnAt = 0;
  * 偏差超过阈值就提示去做五点精细对齐（10 秒），比重做完整校准快得多。
  */
 function checkPoseDrift(frame) {
-  if (app.settings.controlMode === 'head') return;
+  if (app.settings.controlMode === 'head' || app.settings.controlMode === 'hybrid') return;
   const p = app.model && app.model.pose;
   if (!p || !frame || !frame.present) return;
   const now = performance.now();
@@ -351,7 +368,11 @@ const actions = {
       hRange: app.settings.headH || 8,
       vRange: app.settings.headV || 5,
       dead: app.settings.headDead || 44,
+      hybridRange: app.settings.hybridRange || 110,
+      hybridDead: app.settings.hybridDead == null ? 12 : app.settings.hybridDead,
     });
+    if ((app.settings.controlMode || 'eye') === 'mouse') input.pause();
+    else input.resume();
     input.setSettings(app.settings);
     if (vision) vision.showMesh = app.settings.mesh;
     ui.els.dwellHint.textContent = (app.settings.dwellMs / 1000).toFixed(1);
@@ -402,19 +423,20 @@ const actions = {
     notifyAlert({ level: 'info', title: '已重置自校准', detail: '接下来每次注视点击会重新累计修正量。' });
   },
   setControlMode: (mode) => {
-    const m = mode === 'head' ? 'head' : 'eye';
+    const m = ['eye', 'hybrid', 'head', 'mouse'].includes(mode) ? mode : 'eye';
     saveSettings({ controlMode: m });
     tracker.setControlMode(m);
-    if (m === 'head') actions.recenterHead(true);
-    else tracker.reset();
+    if (m === 'mouse') input.pause();
+    else input.resume();
+    if (m === 'head' || m === 'hybrid') actions.recenterHead(true);
     ui.updateModeUI();
-    notifyAlert({
-      level: 'info',
-      title: m === 'head' ? '已切换到头部模式' : '已切换到眼控模式',
-      detail: m === 'head'
-        ? '现在用转头移动光标：幅度由「水平/垂直范围」决定，停下即锁定。点「重新归中」可把当前头部位置设为屏幕中心。'
-        : '回到虹膜眼控，需要先校准；头位变化后可以点几次让它自校准。',
-    });
+    const info = {
+      eye: ['已切换到眼控模式', '读虹膜，最精细；需要校准，头动后可用五点对齐或自校准。'],
+      hybrid: ['已切换到混合模式', '头部负责粗定位、虹膜只做 ±R 精修：既不像纯眼控那样抖，也不用大幅转头。'],
+      head: ['已切换到头部模式', '只读头部转角，免校准、静止不抖；用转头移动光标。'],
+      mouse: ['已切换到仅鼠标', '暂停了眼控与点击，护眼监测继续。用鼠标正常操作即可。'],
+    }[m];
+    notifyAlert({ level: 'info', title: info[0], detail: info[1] });
   },
   recenterHead: (silent) => {
     const f = app.frame;
@@ -519,7 +541,7 @@ function islandPayload() {
     customLabel: isl.customLabel || '',
     customText: isl.customText || '',
     live: app.mode === 'running' || app.mode === 'demo',
-    mode: app.mode,
+    mode: app.settings.controlMode || 'eye',
     blink: Math.round(m.blinkRate || 0),
     fatigue: Math.round(m.fatigue || 0),
     health: Math.round(m.health || 0),
@@ -559,6 +581,8 @@ function bindDesktop() {
     if (name === 'calibrate') { showView('console'); calibrate(false); }
     else if (name === 'refine') { showView('settings'); ui.startAlign(); }
     else if (name === 'settings') showView('settings');
+    else if (name === 'eyecare') showView('eyecare');
+    else if (name.startsWith('mode:')) actions.setControlMode(name.slice(5));
     else if (name === 'report') { showView('coach'); actions.report(); }
     else if (name === 'toggle-pause') {
       pausedByTray = !pausedByTray;
@@ -585,7 +609,10 @@ function boot() {
     hRange: app.settings.headH || 8,
     vRange: app.settings.headV || 5,
     dead: app.settings.headDead || 44,
+    hybridRange: app.settings.hybridRange || 110,
+    hybridDead: app.settings.hybridDead == null ? 12 : app.settings.hybridDead,
   });
+  if ((app.settings.controlMode || 'eye') === 'mouse') input.pause();
   tracker.setHeadZero(app.settings.headZeroYaw || 0, app.settings.headZeroPitch || 0);
   input = createGazeInput(app.settings, () => {});
   health = new HealthMonitor({ onMetrics, onAlert, onBreak: onBreakEvent });
