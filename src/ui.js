@@ -39,6 +39,8 @@ const ids = [
   'modePill', 'headConfig', 'setHeadH', 'setHeadV', 'setHeadDead', 'setHybrid',
   'headHHint', 'headVHint', 'headDeadHint', 'hybridHint', 'hybridRow', 'modeHint',
   'btnRecenter', 'setSystemCursor',
+  'phonePill', 'phoneUrl', 'phoneDetail', 'phoneWeightHint', 'setPhoneWeight',
+  'btnPhoneLan', 'btnPhoneCopy', 'btnPhoneAlign', 'btnPhoneReset',
   'setIsland', 'isBlink', 'isSession', 'isFatigue', 'isHealth', 'isBreak',
   'islandLabel', 'islandText', 'islandPill', 'islandPreview', 'btnIslandShow',
   'setAlertBlink', 'setAlertDist', 'setAlertLight', 'setAlertBreak',
@@ -61,6 +63,7 @@ export const ui = {
     bindTopbar();
     bindOnboard();
     bindSettings();
+    bindPhone();
     bindCare();
     bindAlign();
     bindCalibration();
@@ -626,6 +629,89 @@ function bindCare() {
   if (E.btnCareNext) E.btnCareNext.addEventListener('click', () => goCare(1));
 }
 
+
+/* ---------------- 手机双摄 ---------------- */
+
+export function updatePhoneUI(stats) {
+  const mode = app.settings.phoneMode || 'off';
+  $$('.mode-btn[data-phone-mode]').forEach((b) => b.classList.toggle('on', b.dataset.phoneMode === mode));
+
+  const w = app.settings.phoneWeight == null ? 55 : app.settings.phoneWeight;
+  if (E.setPhoneWeight) E.setPhoneWeight.value = String(w);
+  if (E.phoneWeightHint) E.phoneWeightHint.textContent = `${w}%`;
+
+  const on = !!(stats && stats.connected);
+  if (E.phonePill) {
+    E.phonePill.textContent = on ? '已连接' : '未连接';
+    E.phonePill.className = `pill tiny${on ? ' on' : ''}`;
+  }
+  if (E.phoneDetail) {
+    E.phoneDetail.textContent = on
+      ? `${stats.phone || '手机'} · ${stats.fps} fps · 延迟 ${stats.latency} ms · 丢帧 ${stats.dropped}`
+      : '手机与电脑连同一个 Wi-Fi，用手机浏览器打开地址。';
+  }
+
+  const info = app.phoneInfo;
+  if (E.phoneUrl) {
+    if (info && info.lanUrl) {
+      E.phoneUrl.textContent = info.lanUrl;
+      E.phoneUrl.dataset.url = info.lanUrl;
+    } else if (info && info.lan) {
+      E.phoneUrl.textContent = '局域网已开启（地址读取中）';
+    } else {
+      E.phoneUrl.textContent = window.eyePilotDesktop ? '点「开启局域网」生成地址' : '用 python serve.py --lan 启动后显示地址';
+    }
+  }
+  if (E.btnPhoneLan) {
+    E.btnPhoneLan.textContent = info && info.lan ? '地址已开启' : '开启局域网';
+    E.btnPhoneLan.disabled = !!(info && info.lan);
+  }
+}
+
+function bindPhone() {
+  $$('.mode-btn[data-phone-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => actions.setPhoneMode && actions.setPhoneMode(btn.dataset.phoneMode));
+  });
+  if (E.setPhoneWeight) {
+    E.setPhoneWeight.addEventListener('input', () => {
+      if (E.phoneWeightHint) E.phoneWeightHint.textContent = `${E.setPhoneWeight.value}%`;
+    });
+    E.setPhoneWeight.addEventListener('change', () => {
+      actions.setPhoneWeight && actions.setPhoneWeight(E.setPhoneWeight.value);
+    });
+  }
+  if (E.btnPhoneLan) {
+    E.btnPhoneLan.addEventListener('click', async () => {
+      const r = await (actions.enableLan && actions.enableLan());
+      if (r && r.ok) {
+        await (actions.startPhoneLink && actions.startPhoneLink());
+        toast('手机互联已就绪', '用手机浏览器打开上方地址（带 ?t= 的那一串）', 'good', 6000);
+      }
+    });
+  }
+  if (E.btnPhoneCopy) {
+    E.btnPhoneCopy.addEventListener('click', async () => {
+      const url = (E.phoneUrl && (E.phoneUrl.dataset.url || E.phoneUrl.textContent)) || '';
+      if (!url || !/^https?:\/\//.test(url)) {
+        toast('还没有地址', window.eyePilotDesktop ? '先点「开启局域网」' : '用 python serve.py --lan 启动', 'warn', 4200);
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        toast('已复制', '在手机浏览器粘贴打开即可', 'good', 2600);
+      } catch {
+        toast('复制失败', '手动选中上面的地址复制', 'warn', 3000);
+      }
+    });
+  }
+  if (E.btnPhoneAlign) {
+    E.btnPhoneAlign.addEventListener('click', () => actions.alignPhone && actions.alignPhone());
+  }
+  if (E.btnPhoneReset) {
+    E.btnPhoneReset.addEventListener('click', () => actions.resetPhoneCal && actions.resetPhoneCal());
+  }
+}
+
 /* ---------------- 视线对齐 ---------------- */
 
 const ALIGN_STEPS = [
@@ -675,11 +761,15 @@ export async function startAlign() {
     // 采样这段时间里的预测值中位数，避免用单帧
     const sx = [];
     const sy = [];
+    const usePhone = app.alignSource === 'phone';
     const until = performance.now() + 320;
     while (performance.now() < until) {
       if (run !== alignRun) return;
-      const g = app.gaze;
-      if (g && g.valid && Number.isFinite(g.predY)) { sx.push(g.predX); sy.push(g.predY); }
+      const g = usePhone ? app.phoneGaze : app.gaze;
+      // 手机那一路的原始预测在 rawX/rawY，本机在 predX/predY
+      const px = g ? (usePhone ? g.rawX : g.predX) : NaN;
+      const py = g ? (usePhone ? g.rawY : g.predY) : NaN;
+      if (g && g.valid && Number.isFinite(px) && Number.isFinite(py)) { sx.push(px); sy.push(py); }
       await new Promise((r) => setTimeout(r, 40));
     }
     if (sy.length >= 3) {
@@ -694,10 +784,10 @@ export async function startAlign() {
   if (run !== alignRun) return;
   E.alignOverlay.classList.remove('open');
   if (samples.length < 3) {
-    toast('没采到有效视线', '确保脸在画面中、能正常眨眼，再试一次', 'warn', 4000);
+    toast('没采到有效视线', usePhone ? '检查手机是否在推流、脸是否完整入镜' : '确保脸在画面中、能正常眨眼，再试一次', 'warn', 4000);
     return;
   }
-  actions.applyRefine && actions.applyRefine(samples);
+  actions.applyRefine && actions.applyRefine(samples, usePhone ? 'phone' : 'pc');
 }
 
 function bindAlign() {
@@ -1094,6 +1184,7 @@ Object.assign(ui, {
   updateOffsetUI,
   updateAutoUI,
   updateModeUI,
+  updatePhoneUI,
   startAlign,
   toast,
   appendChat,

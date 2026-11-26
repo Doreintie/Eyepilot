@@ -543,6 +543,27 @@
           </label>
         </div>
 
+        <div class="card phone-card">
+          <div class="card-head"><h3>手机双摄</h3><span class="pill tiny" id="phonePill">未连接</span></div>
+          <p class="body-text">手机当<b>第二视角</b>：架在屏幕侧上方 30–45°，和电脑摄像头同时看脸。两路融合能压抖动、躲镜片反光。画面不出手机，只传 478 个关键点（约 3 KB/帧）。</p>
+          <div class="mode-switch">
+            <button class="mode-btn on" data-phone-mode="off" data-gaze>关闭</button>
+            <button class="mode-btn" data-phone-mode="fuse" data-gaze>融合</button>
+            <button class="mode-btn" data-phone-mode="only" data-gaze>仅手机</button>
+          </div>
+          <label class="range-row"><span>手机权重</span><input type="range" id="setPhoneWeight" min="10" max="90" step="5" value="55" /><b id="phoneWeightHint">55%</b></label>
+          <div class="phone-link-row">
+            <code id="phoneUrl">—</code>
+          </div>
+          <div class="phone-link-actions">
+            <button class="btn ghost sm" id="btnPhoneLan" data-gaze>开启局域网</button>
+            <button class="btn ghost sm" id="btnPhoneCopy" data-gaze>复制地址</button>
+            <button class="btn ghost sm" id="btnPhoneAlign" data-gaze>手机五点对齐</button>
+            <button class="btn link sm" id="btnPhoneReset">重置手机校正</button>
+          </div>
+          <p class="fine" id="phoneDetail">手机与电脑连同一个 Wi-Fi，用手机浏览器打开地址。</p>
+        </div>
+
         <div class="card">
           <div class="card-head"><h3>视线微调</h3><span class="pill tiny" id="offsetPill">偏移 0 , 0 px</span></div>
           <p class="body-text">光标整体偏上/偏下、或「越往右越偏」：点「五点精细对齐」，依次盯住中心 / 上 / 下 / 左 / 右各 2 秒，横纵两轴的偏移与增益会一起重算。小范围偏差也可以用方向键推。</p>
@@ -608,7 +629,7 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.3.0</span></div>
+          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.4.0</span></div>
           <p class="body-text">EyePilot · 瞳行，校园黑客松参赛作品。技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移特征 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件，普通笔记本摄像头即可运行。</p>
           <p class="fine">本作品不构成医疗建议。若持续眼干、眼痛或视力模糊，请就医。</p>
         </div>

@@ -5,7 +5,7 @@
 AI 眼动交互 + 用眼健康监测的桌面 Web 应用。不需要 Tobii 之类的红外眼动仪，笔记本自带的摄像头就够；所有画面在本机浏览器里处理，不上传。
 
 > 校园黑客松参赛作品 · 主题「AI + 眼动交互 / 视觉健康」
-> **当前版本 v1.3.0** · [更新记录](CHANGELOG.md)
+> **当前版本 v1.4.0** · [更新记录](CHANGELOG.md)
 
 ---
 
@@ -42,7 +42,7 @@ AI 眼动交互 + 用眼健康监测的桌面 Web 应用。不需要 Tobii 之�
 | 体积 | 约 148 MB（自带 Chromium） | 约 21 MB（用系统浏览器） |
 | 适合 | 答辩现场、自己电脑 | 微信/QQ 传给别人、快速体验 |
 
-两个包都在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 里：`EyePilot-Desktop-v1.3.0-win64.zip` / `EyePilot-Demo-v1.3.0-win64.zip`。
+两个包都在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 里：`EyePilot-Desktop-v1.4.0-win64.zip` / `EyePilot-Demo-v1.4.0-win64.zip`。
 
 **网页版**自带官方 Python 便携运行时（`runtime/`），收件人不需要安装 Python；系统里已有 Python 也会自动复用。
 
@@ -104,6 +104,47 @@ python serve.py            # 自动打开浏览器；加 --no-open 可关闭
 
 头部模式的做法来自开源项目 [visual_mouse](https://github.com/yang999876/visual_mouse)：
 角度直接映射目标位置，再用「限速 + 死区」逼近，所以角度噪声只会改变移动速度，不会让光标跳。
+
+## 手机当第二摄像头（v1.4.0）
+
+一个摄像头看眼睛，容错很低：逆光、镜片反光、头一转就崩。v1.4.0 让手机在**局域网里当第二视角**，
+架在屏幕侧上方 30–45°，和电脑摄像头同时看脸。
+
+```bash
+python serve.py --lan
+```
+
+启动后终端会打印手机地址，用手机浏览器打开即可：
+
+```
+手机互联已开启（手机和电脑要连同一个 Wi-Fi）
+在手机浏览器打开：https://192.168.1.23:8848/phone.html?t=482913
+```
+
+| 设计 | 为什么这样做 |
+| --- | --- |
+| **只传关键点，不传视频** | 手机端自己跑 MediaPipe，回传 478 个点（2.9 KB/帧）。带宽 ~87 KB/s，画面不出手机 |
+| **复用 analyzeFace()** | 把包还原成 MediaPipe 结果形状，电脑端走同一套特征函数，两路语义完全一致 |
+| **屏幕坐标域融合** | 不在特征域平均——两个视角的特征本来就不是一回事 |
+| **手机独立仿射** | 视角差 30–45°，系统偏差不同，`phoneCal` 单独拟合，不共用电脑端的校正 |
+| **三种模式** | 关闭 / 融合 / 仅手机，权重 10–90% 可调 |
+
+### 为什么必须 HTTPS
+
+手机浏览器的 `getUserMedia` 只在**安全上下文**里可用，`http://192.168.x.x` 不算安全上下文。
+所以 `--lan` 会用 openssl 生成自签证书并启用 HTTPS，手机上首次打开点一次「继续访问」即可。
+证书私钥只留在本机 `certs/`，已加入 `.gitignore`，不会进仓库。
+
+### 实测延迟
+
+| 环节 | 耗时 |
+| --- | --- |
+| 手机采集 + 推理 | 20–40 ms |
+| POST 上传（局域网） | 5–15 ms |
+| SSE 下发 + 解包 + 特征 | 2–5 ms |
+| **合计** | **30–60 ms** |
+
+比电脑内置摄像头多 30–60 ms，所以它适合「融合纠偏 / 抗反光」，不适合单独做实时点击。
 
 ## 桌面版增强（v1.1.0 起）
 
@@ -293,7 +334,7 @@ eyepilot/
 
 两个打包产物体积超过 Git 仓库的常规范围，不随源码提交，放在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 附件里。按对方情况选一个发：
 
-**1. 桌面版 `EyePilot-Desktop-v1.3.0-win64.zip`（约 148 MB）**
+**1. 桌面版 `EyePilot-Desktop-v1.4.0-win64.zip`（约 148 MB）**
 
 - 解压后双击 `EyePilot.exe`，独立窗口运行，看不到浏览器地址栏。
 - 摄像头权限由应用自己处理，不会弹浏览器的权限框。
@@ -302,7 +343,7 @@ eyepilot/
   或右键压缩包 → 属性 → 勾选“解除锁定”再解压。
 - 微信若提示超过 100 MB，改用 QQ / 网盘发送，或发下面的网页版。
 
-**2. 网页版 `EyePilot-Demo-v1.3.0-win64.zip`（约 21 MB）**
+**2. 网页版 `EyePilot-Demo-v1.4.0-win64.zip`（约 21 MB）**
 
 - 解压后双击 `启动.bat`，会自动打开默认浏览器。
 - 自带 Python 运行时，无需安装、无需联网（模型已本地化）。
@@ -322,7 +363,7 @@ eyepilot/
 python serve.py
 ```
 
-需要“解压即用”的免安装包，请到 [Releases](https://github.com/Doreintie/Eyepilot/releases) 下载 `EyePilot-Demo-v1.3.0-win64.zip`。
+需要“解压即用”的免安装包，请到 [Releases](https://github.com/Doreintie/Eyepilot/releases) 下载 `EyePilot-Demo-v1.4.0-win64.zip`。
 
 ---
 

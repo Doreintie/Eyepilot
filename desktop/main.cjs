@@ -8,8 +8,11 @@
 
 const { app, BrowserWindow, Menu, Tray, session, screen, shell, ipcMain, nativeImage } = require('electron');
 const http = require('node:http');
+const https = require('node:https');
+const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 
 const WEB_ROOT = path.join(__dirname, 'web');
 let mainWindow = null;
@@ -37,6 +40,78 @@ const MIME = {
   '.md': 'text/markdown; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
 };
+
+/* ---------------- 手机中继（协议与 serve.py 完全一致） ---------------- */
+
+const LINK = { phone: '', width: 0, height: 0, packets: 0, lastAt: 0, bytes: 0 };
+const SUBS = new Set();
+let lanServer = null;
+let lanPort = 0;
+let lanToken = '';
+let lanHttps = false;
+let lanUrl = '';
+
+function lanAddress() {
+  // 只取「第一个非内网 IPv4」会被 VPN / 虚拟网卡骗到（本机就踩过 26.x）
+  // 所以按「像不像家里/学校的局域网」打分，取最高分
+  const score = (ip) => {
+    if (/^192\.168\./.test(ip)) return 100;
+    if (/^10\./.test(ip)) return 90;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return 80;
+    if (/^(169\.254|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])|26\.|25\.)\./.test(ip)) return 0;
+    return 40;
+  };
+  let best = '';
+  let bestScore = -1;
+  const nets = os.networkInterfaces();
+  for (const list of Object.values(nets)) {
+    for (const n of list || []) {
+      if (n.family !== 'IPv4' || n.internal) continue;
+      const sc = score(n.address);
+      if (sc > bestScore) { bestScore = sc; best = n.address; }
+    }
+  }
+  return best || '127.0.0.1';
+}
+
+function readBinary(req, limit = 128 * 1024) {
+  return new Promise((resolve) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit) { req.destroy(); resolve(null); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', () => resolve(null));
+  });
+}
+
+function broadcast(item) {
+  const text = `data: ${JSON.stringify(item)}\n\n`;
+  for (const res of SUBS) {
+    try { res.write(text); } catch { SUBS.delete(res); }
+  }
+}
+
+function streamEvents(req, res) {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-store',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write('retry: 1500\n: ready\n\n');
+  SUBS.add(res);
+  const ping = setInterval(() => {
+    try { res.write(': ping\n\n'); } catch { /* 断开就等 close */ }
+  }, 15000);
+  req.on('close', () => {
+    clearInterval(ping);
+    SUBS.delete(res);
+  });
+}
 
 function readBody(req, limit = 64 * 1024) {
   return new Promise((resolve) => {
@@ -78,6 +153,63 @@ async function handleApi(req, res, pathname) {
       sendAction(action);
     } catch { /* 忽略 */ }
     json(200, { ok: true });
+    return true;
+  }
+
+  if (pathname.startsWith('/api/link/')) {
+    const fromLan = !/^(::1|127\.0\.0\.1|::ffff:127\.0\.0\.1)$/.test(req.socket.remoteAddress || '');
+    if (fromLan && lanToken && req.headers['x-eyepilot-token'] !== lanToken) {
+      json(401, { error: 'token' });
+      return true;
+    }
+
+    if (pathname === '/api/link/state') {
+      json(200, { ...LINK, lan: !!lanServer, https: lanHttps, lanUrl: fromLan ? '' : lanUrl, token: fromLan ? '' : lanToken });
+      return true;
+    }
+
+    if (pathname === '/api/link/stream') {
+      streamEvents(req, res);
+      return true;
+    }
+
+    if (pathname === '/api/link/frame' && req.method === 'POST') {
+      const buf = await readBinary(req);
+      if (!buf || buf.length < 32 || buf.length > 128 * 1024 || buf.subarray(0, 4).toString('latin1') !== 'EPL1') {
+        json(400, { error: 'bad packet' });
+        return true;
+      }
+      const now = Date.now();
+      LINK.packets += 1;
+      LINK.lastAt = now;
+      LINK.bytes = buf.length;
+      broadcast({ t: now, p: buf.toString('base64') });
+      res.writeHead(204);
+      res.end();
+      return true;
+    }
+
+    if (pathname === '/api/link/hello' && req.method === 'POST') {
+      const raw = await readBody(req);
+      let info = {};
+      try { info = JSON.parse(raw || '{}'); } catch { /* 忽略坏包 */ }
+      LINK.phone = String(info.name || '手机摄像头').slice(0, 48);
+      LINK.width = Number(info.width) || 0;
+      LINK.height = Number(info.height) || 0;
+      LINK.lastAt = Date.now();
+      console.log(`[手机] 已连接：${LINK.phone} (${LINK.width}×${LINK.height})`);
+      json(200, { ok: true });
+      return true;
+    }
+
+    if (pathname === '/api/link/bye' && req.method === 'POST') {
+      if (LINK.phone) console.log(`[手机] 已断开：${LINK.phone}`);
+      LINK.phone = '';
+      json(200, { ok: true });
+      return true;
+    }
+
+    json(404, { error: 'not found' });
     return true;
   }
 
@@ -146,6 +278,88 @@ function startServer() {
     });
   });
 }
+
+/* ---------------- 手机互联：按需在 0.0.0.0 上开一个监听 ---------------- */
+
+function ensureCert() {
+  // 打包后 __dirname 在 app.asar 里，是只读的，证书必须写到用户数据目录
+  const dir = path.join(app.getPath('userData'), 'certs');
+  const crt = path.join(dir, 'lan-dev.crt');
+  const key = path.join(dir, 'lan-dev.key');
+  if (fs.existsSync(crt) && fs.existsSync(key)) return { crt, key };
+  // 手机浏览器只在安全上下文里给摄像头，所以这里也要 HTTPS。
+  // Electron 进程不一定继承了 Git 的 PATH，逐个试常见位置。
+  const candidates = [
+    'openssl',
+    'C:////Program Files\\Git\\usr\\bin\\openssl.exe',
+    'C:////Program Files\\Git\\mingw64\\bin\\openssl.exe',
+    'C:////Program Files (x86)\\Git\\usr\\bin\\openssl.exe',
+  ];
+  const args = [
+    'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+    '-keyout', key, '-out', crt, '-days', '825',
+    '-subj', '/CN=EyePilot LAN',
+    '-addext', `subjectAltName=IP:${lanAddress()},IP:127.0.0.1,DNS:localhost`,
+  ];
+  for (const bin of candidates) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      execFileSync(bin, args, { stdio: 'ignore' });
+      return { crt, key };
+    } catch { /* 试下一个 */ }
+  }
+  return null;
+}
+
+function listenOn(srv, port) {
+  return new Promise((resolve, reject) => {
+    const onErr = (e) => { srv.off('listening', onOk); reject(e); };
+    const onOk = () => { srv.off('error', onErr); resolve(); };
+    srv.once('error', onErr);
+    srv.once('listening', onOk);
+    srv.listen(port, '0.0.0.0');
+  });
+}
+
+async function startLan() {
+  if (lanServer) return { ok: true, url: lanUrl, token: lanToken, https: lanHttps };
+  lanToken = String(Math.floor(100000 + Math.random() * 900000));
+  const cert = ensureCert();
+  const srv = cert
+    ? https.createServer({ key: fs.readFileSync(cert.key), cert: fs.readFileSync(cert.crt) }, serveFile)
+    : http.createServer(serveFile);
+  lanHttps = !!cert;
+
+  let bound = 0;
+  for (let p = 8848; p < 8878; p++) {
+    try {
+      await listenOn(srv, p);
+      bound = p;
+      break;
+    } catch { /* 占用就试下一个 */ }
+  }
+  if (!bound) return { ok: false, error: '8848–8877 都被占用了，先关掉占用的程序再试' };
+
+  lanPort = bound;
+  lanServer = srv;
+  lanUrl = `${lanHttps ? 'https' : 'http'}://${lanAddress()}:${lanPort}/phone.html?t=${lanToken}`;
+  console.log(`[手机] 局域网已开启：${lanUrl}`);
+  return { ok: true, url: lanUrl, token: lanToken, https: lanHttps };
+}
+
+function stopLan() {
+  if (lanServer) {
+    try { lanServer.close(); } catch { /* 已关闭 */ }
+  }
+  lanServer = null;
+  lanPort = 0;
+  lanUrl = '';
+  return { ok: true };
+}
+
+ipcMain.handle('link:enable', () => startLan());
+ipcMain.handle('link:disable', () => stopLan());
+ipcMain.handle('link:status', () => ({ lan: !!lanServer, url: lanUrl, token: lanToken, https: lanHttps }));
 
 function createWindow() {
   const area = screen.getPrimaryDisplay().workAreaSize;

@@ -24,6 +24,10 @@ export const DEFAULT_SETTINGS = {
   hybridRange: 110,
   hybridDead: 12,
   systemCursor: false,
+  // 手机互联：off 关闭 / fuse 融合 / only 仅手机
+  phoneMode: 'off',
+  phoneWeight: 55,
+  phoneCal: { x: { a: 1, b: 0 }, y: { a: 1, b: 0 } },
   headZeroYaw: 0,
   headZeroPitch: 0,
   // 灵动岛（桌面版为独立悬浮窗，网页版只做预览）
@@ -61,11 +65,20 @@ export const app = {
   demo: false,
   activePanel: null,
   calibratedThisSession: false,
+  phoneGaze: null,         // 手机那一路的当前预测
+  phoneFrame: null,        // 手机那一路的最近一帧特征
+  phoneStats: null,
+  alignSource: 'pc',       // 五点对齐针对哪一路：pc | phone
 };
 
 export function mergeSettings(raw) {
   const s = { ...DEFAULT_SETTINGS, ...(raw || {}) };
   s.llm = { ...DEFAULT_SETTINGS.llm, ...((raw && raw.llm) || {}) };
+  const pc = (raw && raw.phoneCal) || {};
+  s.phoneCal = {
+    x: { a: 1, b: 0, ...(pc.x || {}) },
+    y: { a: 1, b: 0, ...(pc.y || {}) },
+  };
   const isl = { ...DEFAULT_SETTINGS.island, ...((raw && raw.island) || {}) };
   isl.items = { ...DEFAULT_SETTINGS.island.items, ...((raw && raw.island && raw.island.items) || {}) };
   s.island = isl;

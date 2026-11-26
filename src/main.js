@@ -10,6 +10,8 @@ import {
 } from './ui.js';
 import { VisionEngine } from './vision.js';
 import { GazeTracker, Calibrator } from './gaze.js';
+import { PhoneLink } from './net/phone-link.js';
+import { fuseTwo } from './core/fusion.js';
 import { createGazeInput } from './input.js';
 import { HealthMonitor } from './health-monitor.js';
 import { AICoach, buildReport, assessLocal } from './ai.js';
@@ -28,6 +30,7 @@ const video = document.getElementById('cam');
 const overlay = document.getElementById('camOverlay');
 
 let vision = null;
+let phoneLink = null;
 let tracker = null;
 let input = null;
 let health = null;
@@ -38,16 +41,62 @@ let lastBaselineAt = 0;
 
 /* ---------------- 帧处理 ---------------- */
 
+/* ---------------- 手机双摄 ---------------- */
+
+function handlePhoneFrame(frame) {
+  app.phoneFrame = frame;
+  if (app.settings.phoneMode === 'off' || !app.model) {
+    app.phoneGaze = null;
+  } else {
+    app.phoneGaze = tracker.predictRemote(frame, app.settings.phoneCal, 1 / 24);
+  }
+  refreshPhoneUi();
+}
+
+async function loadLinkInfo() {
+  try {
+    const r = await fetch('/api/link/state', { cache: 'no-store' });
+    app.phoneInfo = await r.json();
+  } catch {
+    app.phoneInfo = null;
+  }
+  ui.updatePhoneUI(phoneLink ? phoneLink.stats() : null);
+}
+
+let phoneUiAt = 0;
+function refreshPhoneUi() {
+  const now = performance.now();
+  if (now - phoneUiAt < 500) return;
+  phoneUiAt = now;
+  ui.updatePhoneUI && ui.updatePhoneUI(phoneLink ? phoneLink.stats() : null);
+}
+
+/**
+ * 两路融合。
+ * 关：完全用本机；仅手机：直接取手机那一路（本机仍跑，用于头姿与健康指标）；
+ * 融合：按「权重 × 手机置信度」插值，某一路失效时自动退化为另一路。
+ */
+function fuseWithPhone(pcGaze) {
+  const mode = app.settings.phoneMode || 'off';
+  if (mode === 'off') return pcGaze;
+  const ph = app.phoneGaze;
+  if (!ph) return pcGaze;
+  if (mode === 'only') return { ...ph, valid: ph.valid, source: 'phone', fused: true };
+  const w = (app.settings.phoneWeight == null ? 55 : app.settings.phoneWeight) / 100;
+  return fuseTwo(pcGaze, ph, w, window.innerWidth, window.innerHeight);
+}
+
 function afterFrame(frame, gaze) {
   app.frame = frame;
-  app.gaze = gaze;
+  const shown = fuseWithPhone(gaze);
+  app.gaze = shown;
   // 校准器需要每一帧原始几何特征；之前漏了这一行，导致“样本太少”
   if (calibrator && calibrator.active) calibrator.pushFrame(frame);
-  input.update(gaze, frame);
-  pushSystemCursor(gaze);
-  health.ingest(frame, gaze);
-  pluginHost.frame(frame, gaze);
-  renderLive(frame, gaze, frame.fps);
+  input.update(shown, frame);
+  pushSystemCursor(shown);
+  health.ingest(frame, shown);
+  pluginHost.frame(frame, shown);
+  renderLive(frame, shown, frame.fps);
   checkPoseDrift(frame);
 }
 
@@ -393,11 +442,26 @@ const actions = {
    * 横向用左/中/右三点、纵向用上/中/下三点，各自拟合 target ≈ a·pred + b，
    * 同时修偏移与增益；结果直接写回模型并落盘，不动用户手动的 offset。
    */
-  applyRefine: (samples) => {
+  applyRefine: (samples, source) => {
     const m = app.model;
-    if (!m || !samples || samples.length < 3) return;
+    if (!samples || samples.length < 3) return;
     const fx = fitAffine1D(samples.map((s) => s.predX), samples.map((s) => s.targetX));
     const fy = fitAffine1D(samples.map((s) => s.predY), samples.map((s) => s.targetY));
+
+    // 手机那一路单独一套仿射：视角不同，系统偏差也不同，不能共用
+    if (source === 'phone') {
+      saveSettings({ phoneCal: { x: { a: fx.a, b: fx.b }, y: { a: fy.a, b: fy.b } } });
+      app.alignSource = 'pc';
+      ui.updatePhoneUI && ui.updatePhoneUI(phoneLink ? phoneLink.stats() : null);
+      notifyAlert({
+        level: 'good',
+        title: '手机通道已对齐',
+        detail: `横向增益 ${fx.a.toFixed(2)}、纵向增益 ${fy.a.toFixed(2)}。现在两路应该指向同一处，可以打开融合了。`,
+      });
+      return;
+    }
+
+    if (!m) return;
     m.calX = { a: fx.a, b: fx.b };
     m.calY = { a: fy.a, b: fy.b };
     persistModel(m);
@@ -415,6 +479,69 @@ const actions = {
       title: '五点对齐完成',
       detail: `横向增益 ${fx.a.toFixed(2)}、纵向增益 ${fy.a.toFixed(2)}，纵向偏移 ${px > 0 ? '+' : ''}${px} px。`,
     });
+  },
+  startPhoneLink: async () => {
+    if (!phoneLink) {
+      phoneLink = new PhoneLink({ onFrame: handlePhoneFrame, onStatus: () => refreshPhoneUi() });
+    }
+    const info = await phoneLink.connect();
+    refreshPhoneUi();
+    if (!info || !info.lan) {
+      ui.toast('手机互联还没开启', '网页版请用 python serve.py --lan 启动；桌面版点「开启局域网」', 'warn', 5200);
+    }
+    return info;
+  },
+  stopPhoneLink: () => {
+    if (phoneLink) phoneLink.disconnect();
+    app.phoneGaze = null;
+    app.phoneFrame = null;
+    refreshPhoneUi();
+  },
+  enableLan: async () => {
+    const d = window.eyePilotDesktop;
+    if (!d || !d.link) {
+      ui.toast('网页版请重启服务', '关掉当前服务，改用 python serve.py --lan 启动，就会打印手机地址', 'warn', 6000);
+      return null;
+    }
+    const r = await d.link.enable();
+    if (!r || !r.ok) {
+      ui.toast('局域网开启失败', (r && r.error) || '检查防火墙是否拦截了 8848 端口', 'warn', 6000);
+      return null;
+    }
+    if (!r.https) {
+      ui.toast('没有找到 openssl，只能走 HTTP', '手机浏览器会拒绝摄像头。装 Git for Windows 后重开，或改用 python serve.py --lan。', 'warn', 8000);
+    }
+    if (!r.https) {
+      ui.toast('没有找到 openssl，只能走 HTTP', '手机浏览器会拒绝摄像头。装 Git for Windows 后重开，或改用 python serve.py --lan。', 'warn', 8000);
+    }
+    refreshPhoneUi();
+    return r;
+  },
+  setPhoneMode: (mode) => {
+    const m = ['off', 'fuse', 'only'].includes(mode) ? mode : 'off';
+    saveSettings({ phoneMode: m });
+    ui.updatePhoneUI(phoneLink ? phoneLink.stats() : null);
+    if (m !== 'off' && !phoneLink) actions.startPhoneLink();
+    if (m !== 'off' && !app.model) {
+      ui.toast('还没有校准', '手机那一路也要用同一个模型，先完成一次九点校准', 'warn', 5000);
+    }
+  },
+  setPhoneWeight: (v) => {
+    saveSettings({ phoneWeight: Math.max(0, Math.min(100, Number(v) || 0)) });
+  },
+  alignPhone: () => {
+    if (!app.phoneGaze) {
+      ui.toast('手机还没数据', '先让手机开始推流，并确认状态是「推流中」', 'warn', 4200);
+      return;
+    }
+    app.alignSource = 'phone';
+    ui.startAlign();
+  },
+  resetPhoneCal: () => {
+    saveSettings({ phoneCal: { x: { a: 1, b: 0 }, y: { a: 1, b: 0 } } });
+    tracker.reset();
+    ui.updatePhoneUI(phoneLink ? phoneLink.stats() : null);
+    notifyAlert({ level: 'info', title: '已重置手机校正', detail: '手机通道回到未校正状态，建议重新做一次手机五点对齐。' });
   },
   resetAutoOffset: () => {
     saveSettings({ autoX: 0, autoY: 0, autoN: 0 });
@@ -631,6 +758,8 @@ function boot() {
     onCancel: onCalibrationCancel,
   });
   renderPluginGrid(document.getElementById('pluginGrid'));
+  ui.updatePhoneUI(null);
+  loadLinkInfo();
 
   // 每次“注视点击”都提供一个已知落点，用它缓慢修正整体偏移（头挪动后的漂移主要靠这个）
   window.addEventListener('eyepilot:click', (ev) => {

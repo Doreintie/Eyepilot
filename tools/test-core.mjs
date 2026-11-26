@@ -3,6 +3,8 @@ import {
   fitRidge, predictRidge, buildFeatureVector, OneEuroFilter, medianVector, linearTrend, clamp,
   fitAffine1D, FEATURE_VERSION, featureDim,
 } from '../src/core/math.js';
+import { encodeFrame, decodeFrame, toResult, PACKET_BYTES, LM_COUNT } from '../src/net/protocol.js';
+import { fuseTwo, disagreement } from '../src/core/fusion.js';
 import {
   computePerclos, computeBlinkRate, computeBlinkStats, computeFocus, computeFatigue,
   computeHealthScore, estimateDistanceCm, lumaToLux, eyeOpenness,
@@ -143,6 +145,53 @@ console.log('\n[10] 边界');
 {
   ok('clamp', clamp(-1, 0, 1) === 0 && clamp(2, 0, 1) === 1);
   ok('空样本不崩溃', computePerclos([], 0) === 0 && computeFocus([], 0).score === 0);
+}
+
+
+console.log('\n[11] 手机传输协议');
+{
+  const lm = Array.from({ length: LM_COUNT }, (_, i) => ({
+    x: (i % 100) / 100, y: ((i * 7) % 100) / 100, z: ((i % 21) - 10) / 100,
+  }));
+  const buf = encodeFrame({ seq: 7, captureAt: 1234.5, width: 720, height: 1280, landmarks: lm, blinkL: 0.2, blinkR: 0.8 });
+  ok('包长固定', buf.byteLength === PACKET_BYTES);
+  const back = decodeFrame(buf);
+  ok('magic 能解回', !!back && back.seq === 7 && back.width === 720 && back.height === 1280);
+  ok('点数一致', back.landmarks.length === LM_COUNT);
+  let maxErr = 0;
+  for (let i = 0; i < LM_COUNT; i++) {
+    maxErr = Math.max(maxErr, Math.abs(back.landmarks[i].x - lm[i].x), Math.abs(back.landmarks[i].y - lm[i].y));
+  }
+  ok('x/y 量化误差 < 2e-5', maxErr < 2e-5, `got ${maxErr.toExponential(2)}`);
+  ok('眨眼保留', Math.abs(back.blink[0] - 0.2) < 0.01 && Math.abs(back.blink[1] - 0.8) < 0.01);
+
+  const result = toResult(back);
+  ok('还原成 MediaPipe 形状', result.faceLandmarks.length === 1 && result.faceBlendshapes[0].categories.length === 2);
+  ok('眨眼名字正确', result.faceBlendshapes[0].categories[0].categoryName === 'eyeBlinkLeft');
+
+  const bad = new Uint8Array(buf.slice(0));
+  bad[0] = 0;
+  ok('magic 不对返回 null', decodeFrame(bad.buffer) === null);
+  ok('截断返回 null', decodeFrame(new Uint8Array(20).buffer) === null);
+}
+
+console.log('\n[12] 双路融合');
+{
+  const pc = { x: 400, y: 300, nx: 0.4, ny: 0.3, valid: true, confidence: 0.9 };
+  const ph = { x: 600, y: 300, nx: 0.6, ny: 0.3, valid: true, confidence: 1 };
+  const half = fuseTwo(pc, ph, 0.5, 1440, 900);
+  ok('权重 0.5 取中点', close(half.x, 500, 1e-6), `got ${half.x}`);
+  ok('融合来源标记', half.source === 'fuse');
+  const zero = fuseTwo(pc, ph, 0, 1440, 900);
+  ok('权重 0 等于本机', close(zero.x, 400, 1e-6));
+  ok('手机无效退回本机', fuseTwo(pc, { valid: false }, 0.8, 1440, 900).x === 400);
+  ok('本机无效用手机', fuseTwo({ valid: false }, ph, 0.8, 1440, 900).x === 600);
+  const conf = fuseTwo(pc, { ...ph, confidence: 0.5 }, 1, 1440, 900);
+  ok('置信度参与加权', close(conf.x, 500, 1e-6), `got ${conf.x}`);
+  const edge = fuseTwo(pc, { ...ph, x: 5000 }, 1, 1440, 900);
+  ok('融合结果夹在屏幕内', edge.x <= 1440 && edge.x >= 0);
+  ok('分歧度量', close(disagreement(pc, ph), 200, 1e-6));
+  ok('单路无分歧', disagreement(pc, { valid: false }) === null);
 }
 
 console.log(`\n结果：${pass} 通过 / ${fail} 失败\n`);

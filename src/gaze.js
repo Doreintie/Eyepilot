@@ -51,6 +51,10 @@ export class GazeTracker {
     this.irisBuf = [];
     this.ifx = new OneEuroFilter({ minCutoff: 0.9, beta: 0.006 });
     this.ify = new OneEuroFilter({ minCutoff: 0.9, beta: 0.006 });
+    // 远端（手机）专用：同样的滤波参数，但独立的缓冲与校正
+    this.remoteBuf = [];
+    this.rfx = new OneEuroFilter({ minCutoff: 1.0, beta: 0.006 });
+    this.rfy = new OneEuroFilter({ minCutoff: 1.0, beta: 0.006 });
   }
 
   setControlMode(mode) {
@@ -126,6 +130,50 @@ export class GazeTracker {
       x: clamp(nx, 0, 1) * vw + this.offset.x + this.auto.x,
       y: clamp(ny, 0, 1) * vh + this.offset.y + this.auto.y,
       vec,
+    };
+  }
+
+  /**
+   * 手机那一路的预测。
+   * 手机架在侧上方 30–45°，和电脑摄像头不是同一个视角，同一个模型直接套
+   * 会带一个系统性偏移，所以这里**只**叠手机自己的仿射校正（phoneCal），
+   * 不碰 PC 的 offset / auto —— 那两个量是「本机视角下」的修正。
+   */
+  predictRemote(frame, cal, dt = 1 / 24) {
+    if (!this.model || !frame || !frame.present) return null;
+    const vec = buildFeatureVector(frame, this.model.degree || 1);
+    if (!vec.length) return null;
+    const pred = predictRidge(this.model, vec);
+
+    // 手机端帧率比本机低，单帧噪声占比更高，中值窗口同样取 5
+    this.remoteBuf.push([pred[0], pred[1]]);
+    if (this.remoteBuf.length > 5) this.remoteBuf.shift();
+    const xs = this.remoteBuf.map((v) => v[0]).sort((a, b) => a - b);
+    const ys = this.remoteBuf.map((v) => v[1]).sort((a, b) => a - b);
+    const mx = xs[xs.length >> 1];
+    const my = ys[ys.length >> 1];
+
+    const cx = (cal && cal.x) || { a: 1, b: 0 };
+    const cy = (cal && cal.y) || { a: 1, b: 0 };
+    const nx = clamp(cx.a * mx + cx.b, -0.25, 1.25);
+    const ny = clamp(cy.a * my + cy.b, -0.25, 1.25);
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let conf = 1;
+    if (frame.open < 0.55) conf *= clamp((frame.open - 0.32) / 0.23, 0.15, 1);
+    conf *= 1 - clamp(Math.abs(frame.yaw || 0) * 0.5, 0, 0.35);
+
+    return {
+      nx,
+      ny,
+      x: clamp(this.rfx.filter(clamp(nx, 0, 1) * vw, Math.min(0.2, dt)), 0, vw),
+      y: clamp(this.rfy.filter(clamp(ny, 0, 1) * vh, Math.min(0.2, dt)), 0, vh),
+      rawX: mx,
+      rawY: my,
+      confidence: conf,
+      valid: conf > 0.28 && nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1,
+      source: 'phone',
     };
   }
 
@@ -303,11 +351,12 @@ export class GazeTracker {
     this.irisBuf = [];
     this.ifx.reset();
     this.ify.reset();
+    // 手机那一路有自己的一套平滑与仿射校正，不能和本机共用缓冲
+    this.remoteBuf = [];
+    this.rfx.reset();
+    this.rfy.reset();
     this.hfx.reset();
     this.hfy.reset();
-    this.irisBuf = [];
-    this.ifx.reset();
-    this.ify.reset();
   }
 
   update(frame) {
