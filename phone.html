@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
 <meta name="theme-color" content="#05070c" />
 <title>EyePilot 手机摄像头</title>
+<link rel="icon" href="data:," />
 <style>
   :root {
     --bg: #05070c;
@@ -347,6 +348,8 @@ function tick() {
   post(buf);
 }
 
+// 就绪标记：方便排查「页面出来了但脚本没跑」
+document.documentElement.dataset.phone = 'ready';
 $('btnStart').addEventListener('click', start);
 $('btnStop').addEventListener('click', stop);
 document.addEventListener('visibilitychange', () => {
