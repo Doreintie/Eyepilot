@@ -38,6 +38,11 @@ import webbrowser
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CERT_DIR = os.path.join(ROOT, "certs")
 
+# 手机帧包固定长度：4 字节 magic + 16 字节头 + 478 点 × 6 字节 + 2 字节眨眼
+# 必须和 src/net/protocol.js 的 PACKET_BYTES 保持一致。
+# 长度不对就拒收，否则截断包会写进缓存把好数据覆盖掉（前端只会看到一帧乱点）。
+PACKET_BYTES = 2894
+
 # ---------------------------------------------------------------- 中继状态
 LINK = {
     "phone": "",
@@ -227,8 +232,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         if path == "/api/link/frame":
             body = self.read_body()
-            if not body or len(body) < 32 or body[:4] != b"EPL1":
-                self.send_json(400, {"error": "bad packet"})
+            if not body or len(body) != PACKET_BYTES or body[:4] != b"EPL1":
+                self.send_json(400, {"error": "bad packet", "bytes": len(body), "want": PACKET_BYTES})
                 return
             now = time.time() * 1000
             with LINK_LOCK:

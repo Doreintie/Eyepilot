@@ -1,148 +1,229 @@
 /* ============================================================
-   EyePilot · 瞳行  —  glass skin (v1.4.1)
-   叠在 main.css 之后，只覆盖设计变量与大型表面；
-   组件布局与 JS 一行不动。删除 index.html 里这行 <link> 即回滚。
+   glass.css — 玻璃拟态皮肤（叠在 main.css 之后）
+   ------------------------------------------------------------
+   设计来源：demo-session.html
+   · 冰岛长曝光瀑布作底，压暗 + 环境光
+   · 磨砂毛玻璃卡片：blur(26px) saturate(160%)
+   · 细白弱描边 + 顶部一道高光丝
+   · 低饱和冷调，只让强调色（薄荷 / 冰蓝）保持中高饱和
+
+   实现方式：只覆盖设计变量与大型表面，组件内部布局与逻辑样式一律不动。
+   所有颜色都走变量，因此亮色主题同样是「结霜的玻璃」，不会出现深底深字。
    ============================================================ */
 
-:root {
-  --glass-bg: linear-gradient(157deg, rgba(255,255,255,.175), rgba(255,255,255,.075) 48%, rgba(255,255,255,.105));
-  --glass-line: rgba(255,255,255,.20);
-  --glass-line-soft: rgba(255,255,255,.11);
-  --glass-blur: blur(26px) saturate(160%) brightness(1.06);
-  --glass-shadow: 0 30px 76px -30px rgba(2,9,18,.82);
-  --mint: #5FE3B8;
-  --ice: #69CBEF;
+/* ---------------- 1. 背景层 ---------------- */
+html { background: #0b1724; }
+
+.bg {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: url("../assets/bg-iceland.jpg") center 42% / cover no-repeat;
+  filter: saturate(1.42) brightness(1.26) contrast(1.06);
 }
 
-/* ---------- 暗色玻璃 ---------- */
+.scrim {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: var(--veil);
+}
+
+body { background: transparent; }
+.app { position: relative; z-index: 2; }
+
+/* ---------------- 2. 设计变量 ---------------- */
+:root {
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 28px;
+  --glass-blur: blur(26px) saturate(160%) brightness(1.06);
+  --hair: inset 0 1px 0 rgba(255, 255, 255, .30), inset 0 -1px 0 rgba(255, 255, 255, .06);
+}
+
 :root[data-theme="dark"] {
-  --bg: #0b1724;
-  --bg-grad:
-    radial-gradient(58% 44% at 16% 4%, rgba(126,222,238,.20), transparent 64%),
-    radial-gradient(46% 38% at 92% 96%, rgba(150,132,232,.12), transparent 72%),
-    linear-gradient(100deg, rgba(6,15,26,.62) 0%, rgba(6,15,26,.30) 32%, rgba(6,15,26,.02) 60%, rgba(6,15,26,.10) 100%),
-    url("../assets/bg-iceland.png") center 42% / cover no-repeat fixed;
-  --panel: rgba(11, 23, 36, .46);
+  --bg: transparent;
+  --bg-grad: none;
+  --panel: rgba(255, 255, 255, .10);
   --panel-2: rgba(255, 255, 255, .075);
-  --panel-3: rgba(255, 255, 255, .11);
-  --line: var(--glass-line);
-  --line-2: rgba(255, 255, 255, .30);
+  --panel-3: rgba(255, 255, 255, .055);
+  --line: rgba(255, 255, 255, .18);
+  --line-2: rgba(255, 255, 255, .28);
   --text: #EAF2F8;
-  --muted: rgba(234, 242, 248, .82);
-  --dim: rgba(234, 242, 248, .62);
-  --accent: var(--mint);
+  --muted: rgba(234, 242, 248, .70);
+  --dim: rgba(234, 242, 248, .44);
+  --accent: #5FE3B8;
   --accent-soft: rgba(95, 227, 184, .16);
-  --accent-2: var(--ice);
+  --accent-2: #69CBEF;
   --accent-2-soft: rgba(105, 203, 239, .16);
-  --good: var(--mint);
+  --good: #5FE3B8;
   --warn: #F3C470;
   --bad: #F08C7C;
-  --shadow: var(--glass-shadow);
+  --shadow: 0 30px 76px -30px rgba(2, 9, 18, .82);
   --grid-line: rgba(255, 255, 255, .07);
-  --code-bg: rgba(6, 14, 24, .5);
+  --code-bg: rgba(6, 16, 28, .50);
+
+  /* 玻璃的「底」：白纱做质感，这一层负责文字对比 */
+  --glass-base: rgba(7, 17, 29, .46);
+  --glass-base-strong: rgba(6, 14, 25, .58);
+  --glass-base-soft: rgba(8, 20, 33, .46);
+  --chip-bg: rgba(255, 255, 255, .09);
+  --field-bg: rgba(255, 255, 255, .08);
+  --veil-solid: #050d17;
+  --veil:
+    radial-gradient(58% 44% at 16% 4%, rgba(126, 222, 238, .16), transparent 64%),
+    radial-gradient(46% 38% at 92% 96%, rgba(150, 132, 232, .12), transparent 72%),
+    linear-gradient(100deg, rgba(6, 15, 26, .84) 0%, rgba(6, 15, 26, .68) 34%, rgba(6, 15, 26, .46) 64%, rgba(6, 15, 26, .54) 100%),
+    linear-gradient(180deg, rgba(5, 12, 21, .30), rgba(4, 10, 18, .62));
 }
 
-/* 冰岛瀑布底图需要深色文字承载：浅色主题也做成透镜感，但保留深色字 */
+/* 亮色主题不是白底，而是「结霜的玻璃」：同样透出照片，只是整体更亮 */
 :root[data-theme="light"] {
-  --bg-grad:
-    radial-gradient(58% 44% at 16% 4%, rgba(255,255,255,.55), transparent 64%),
-    linear-gradient(100deg, rgba(238,244,252,.86) 0%, rgba(238,244,252,.70) 46%, rgba(238,244,252,.62) 100%),
-    url("../assets/bg-iceland.png") center 42% / cover no-repeat fixed;
+  --bg: transparent;
+  --bg-grad: none;
   --panel: rgba(255, 255, 255, .62);
-  --panel-2: rgba(255, 255, 255, .50);
-  --panel-3: rgba(255, 255, 255, .72);
-  --line: rgba(255, 255, 255, .60);
-  --line-2: rgba(17, 34, 64, .20);
-  --shadow: 0 24px 60px -30px rgba(24, 45, 84, .42);
+  --panel-2: rgba(255, 255, 255, .52);
+  --panel-3: rgba(255, 255, 255, .42);
+  --line: rgba(255, 255, 255, .70);
+  --line-2: rgba(255, 255, 255, .88);
+  --text: #0d1a28;
+  --muted: rgba(13, 26, 40, .68);
+  --dim: rgba(13, 26, 40, .48);
+  --accent: #0f9c78;
+  --accent-soft: rgba(15, 156, 120, .14);
+  --accent-2: #2a7fb8;
+  --accent-2-soft: rgba(42, 127, 184, .14);
+  --shadow: 0 26px 60px -30px rgba(8, 24, 40, .45);
+  --hair: inset 0 1px 0 rgba(255, 255, 255, .85), inset 0 -1px 0 rgba(120, 150, 180, .10);
+
+  --glass-base: rgba(255, 255, 255, .60);
+  --glass-base-strong: rgba(255, 255, 255, .72);
+  --glass-base-soft: rgba(255, 255, 255, .56);
+  --chip-bg: rgba(255, 255, 255, .72);
+  --field-bg: rgba(255, 255, 255, .66);
+  --veil-solid: #eaf2fa;
+  --veil:
+    radial-gradient(58% 44% at 16% 4%, rgba(140, 226, 240, .28), transparent 64%),
+    radial-gradient(46% 38% at 92% 96%, rgba(170, 158, 236, .20), transparent 72%),
+    linear-gradient(100deg, rgba(236, 245, 252, .90) 0%, rgba(236, 245, 252, .74) 34%, rgba(236, 245, 252, .48) 64%, rgba(236, 245, 252, .58) 100%),
+    linear-gradient(180deg, rgba(234, 243, 251, .34), rgba(226, 237, 248, .70));
 }
 
-/* ---------- 大型表面：玻璃 ---------- */
-html[data-glass="on"] .topbar,
-html[data-glass="on"] .rail {
-  background: rgba(9, 20, 32, .42);
-  -webkit-backdrop-filter: blur(26px) saturate(160%);
-  backdrop-filter: blur(26px) saturate(160%);
-}
-html[data-glass="on"][data-theme="light"] .topbar,
-html[data-glass="on"][data-theme="light"] .rail {
-  background: rgba(255, 255, 255, .48);
-}
+/* 白纱层：两个主题共用同一条渐变，只有底色不同 */
+:root[data-theme="dark"] { --glass: linear-gradient(157deg, rgba(255, 255, 255, .165), rgba(255, 255, 255, .070) 48%, rgba(255, 255, 255, .100)), var(--glass-base); }
+:root[data-theme="light"] { --glass: linear-gradient(157deg, rgba(255, 255, 255, .55), rgba(255, 255, 255, .30) 48%, rgba(255, 255, 255, .42)), var(--glass-base); }
 
-html[data-glass="on"] .card,
-html[data-glass="on"] .stat-box,
-html[data-glass="on"] .modal,
-html[data-glass="on"] .fs-card {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
+/* ---------------- 3. 玻璃表面 ---------------- */
+.card {
+  background: var(--glass);
   backdrop-filter: var(--glass-blur);
-  border-color: var(--glass-line);
-  box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,.30), inset 0 -1px 0 rgba(255,255,255,.06);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow), var(--hair);
+  padding: 15px 17px;
 }
-
-/* 顶部高光丝 */
-html[data-glass="on"] .card::after,
-html[data-glass="on"] .fs-card::after {
-  content: ""; position: absolute; left: 20px; right: 20px; top: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.62), transparent);
+.card::after {
+  content: ""; position: absolute; left: 18px; right: 18px; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent);
   pointer-events: none;
 }
 
-html[data-glass="on"][data-theme="light"] .card,
-html[data-glass="on"][data-theme="light"] .stat-box,
-html[data-glass="on"][data-theme="light"] .modal,
-html[data-glass="on"][data-theme="light"] .fs-card {
-  background: linear-gradient(157deg, rgba(255,255,255,.82), rgba(255,255,255,.60) 48%, rgba(255,255,255,.72));
+.topbar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .095), rgba(255, 255, 255, .040)), var(--glass-base-strong);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  border-bottom: 1px solid var(--line);
 }
 
-/* ---------- 眼控可点性：玻璃下把所有可点目标提亮、加清晰边界 ---------- */
-/* 主按钮保留强对比渐变，不让它被半透明吞掉；描边按钮补一层实色底 */
-html[data-glass="on"] .btn:not(.primary):not(.ghost):not(.link),
-html[data-glass="on"] .icon-btn,
-html[data-glass="on"] .rail-btn,
-html[data-glass="on"] .chip-btn,
-html[data-glass="on"] .fs-seg button {
-  background: rgba(255, 255, 255, .13);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border-color: rgba(255, 255, 255, .26);
-}
-html[data-glass="on"] .btn.primary {
-  background: linear-gradient(135deg, var(--mint), var(--ice));
-  color: #04110f;
-  border-color: rgba(255, 255, 255, .45);
-  box-shadow: 0 8px 26px -10px var(--mint), inset 0 1px 0 rgba(255,255,255,.5);
-}
-html[data-glass="on"][data-theme="light"] .btn.primary { color: #fff; }
-
-html[data-glass="on"] .rail-more-menu {
-  background: rgba(11, 23, 36, .82);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  backdrop-filter: blur(20px) saturate(150%);
-  border-color: var(--glass-line);
-}
-html[data-glass="on"][data-theme="light"] .rail-more-menu { background: rgba(245, 250, 252, .92); }
-html[data-glass="on"] .rail-more-toggle.open {
-  background: rgba(95, 227, 184, .16);
-  border-color: rgba(95, 227, 184, .5);
-  color: var(--mint);
+.rail {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .080), rgba(255, 255, 255, .035)), var(--glass-base-strong);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  border-right: 1px solid var(--line);
 }
 
-/* 注视光环在玻璃背景上要更亮 */
-html[data-glass="on"] .tile.is-target,
-html[data-glass="on"] .gaze-target-active {
-  border-color: rgba(95, 227, 184, .85);
+.tile {
+  background: linear-gradient(157deg, rgba(255, 255, 255, .15), rgba(255, 255, 255, .055)), var(--glass-base-soft);
+  backdrop-filter: blur(20px) saturate(150%) brightness(1.05);
+  -webkit-backdrop-filter: blur(20px) saturate(150%) brightness(1.05);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 22px 50px -26px rgba(2, 9, 18, .70), var(--hair);
 }
 
-/* ---------- 专注会话专属：环形与数字提亮 ---------- */
-html[data-glass="on"] .fs-ring .fg { stroke: var(--mint); filter: drop-shadow(0 0 8px rgba(95,227,184,.55)); }
-html[data-glass="on"] .fs-ring-txt b { color: var(--text); text-shadow: 0 2px 24px rgba(130,230,240,.4); }
-
-/* ---------- 窄屏：关掉重模糊，保性能 ---------- */
-@media (max-width: 760px) {
-  html[data-glass="on"] .card,
-  html[data-glass="on"] .fs-card,
-  html[data-glass="on"] .stat-box {
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
-    backdrop-filter: blur(14px) saturate(140%);
-  }
+.modal {
+  background: linear-gradient(157deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .075)), var(--glass-base-strong);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 40px 90px -40px rgba(2, 9, 18, .80), var(--hair);
 }
+.modal-backdrop { background: rgba(4, 12, 22, .55); backdrop-filter: blur(10px); }
+
+/* 小控件：保持轻，避免到处糊成一片 */
+.pill { background: var(--chip-bg); border: 1px solid var(--line); backdrop-filter: blur(10px); }
+.btn { background: var(--chip-bg); border: 1px solid var(--line-2); backdrop-filter: blur(12px); }
+.btn.primary {
+  background: linear-gradient(160deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  color: #07211b;
+  font-weight: 650;
+  box-shadow: 0 12px 30px -14px rgba(95, 227, 184, .60);
+}
+
+input, select, textarea {
+  background: var(--field-bg);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+}
+input::placeholder, textarea::placeholder { color: var(--dim); }
+
+::-webkit-scrollbar-thumb { background: var(--line-2); border: 3px solid transparent; background-clip: padding-box; }
+
+/* 摄像头预览位：原来是一块纯黑 #060a10，在玻璃面板里像个洞。
+   改成带内高光的深色玻璃，未开相机时也不显得突兀 */
+.cam-wrap {
+  background: linear-gradient(160deg, rgba(10, 24, 38, .78), rgba(4, 9, 16, .90));
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10), inset 0 0 60px -30px rgba(95, 227, 184, .25);
+}
+.cam-empty { color: rgba(234, 242, 248, .52); }
+
+/* ---------------- 4. 首次引导层 ---------------- */
+/* 原样式用 color-mix(var(--bg) 72%) 做遮罩；--bg 透明后会退化成「只模糊不压暗」，
+   整个界面糊成灰雾，所以这里给一层真正的幕布 + 玻璃底板 */
+.onboard {
+  background: color-mix(in srgb, var(--veil-solid) 82%, transparent);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+.onboard-inner {
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--line-2);
+  border-radius: 26px;
+  padding: 34px 32px 30px;
+  box-shadow: var(--shadow), var(--hair);
+  position: relative;
+}
+.onboard-inner::after {
+  content: ""; position: absolute; left: 26px; right: 26px; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .58), transparent);
+  pointer-events: none;
+}
+
+/* 磁贴中间的幽灵图形原来只有 0.07，投影上完全看不见，抬到 0.11 让它成为背景纹理 */
+.tile-ghost { opacity: .11; }
+
+/* 标题原来靠 margin-top:auto 压在磁贴底部，中间空出 100 多像素，
+   第一眼看到的是四个空盒子。改成跟在图标下面，幽灵图形沉到背景 */
+.tile-t { margin-top: 12px; }
+.tile-s { margin-top: 2px; }
+
+/* ---------------- 5. 投影仪保底 ---------------- */
+/* 现场投影对比度会被砍三成，给关键文字补一点字重阴影 */
+:root[data-theme="dark"] .kpi b,
+:root[data-theme="dark"] .tile-t,
+:root[data-theme="dark"] h1,
+:root[data-theme="dark"] h2,
+:root[data-theme="dark"] h3 { text-shadow: 0 1px 2px rgba(2, 9, 18, .45); }
