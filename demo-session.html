@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EyePilot 自律 · 专注会话</title>
+<link rel="icon" href="data:,">
 <style>
 /* ============ 基础 ============ */
 *{box-sizing:border-box;margin:0;padding:0}
@@ -300,10 +301,6 @@ body{
       <div><b>EyePilot</b><span>自律</span></div>
     </div>
     <div class="grow"></div>
-    <div class="seg" id="seg">
-      <button class="on" data-scene="paper">纸质学习</button>
-      <button data-scene="screen">电脑学习</button>
-    </div>
     <div class="chip"><span class="d"></span>本地推理 · 不上传</div>
     <button class="btn line" id="btnEnd">结束会话</button>
   </header>
@@ -315,7 +312,7 @@ body{
         <div>
           <div class="eyebrow">Focus Session</div>
           <h1 id="hTitle">第 2 轮 · 25 分钟</h1>
-          <div class="sub" id="hSub">纸质学习 · 写字 / 看书</div>
+          <div class="sub" id="hSub">眼神与头部信号 · 免校准</div>
         </div>
         <div class="chip" id="camChip"><span class="d"></span><span id="camChipTx">摄像头已就绪</span></div>
       </div>
@@ -350,7 +347,7 @@ body{
       <div class="stage-foot">
         <div class="l">
           本轮已专注 <b id="fElapsed">0 分 0 秒</b><br>
-          <span id="fHint">识别到书写节律，判定为正常学习中</span>
+          <span id="fHint">视线稳定在屏幕内，判定为正常学习中</span>
         </div>
         <div class="acts">
           <button class="btn" id="btnPause">暂停</button>
@@ -377,14 +374,14 @@ body{
           <div><span>本次分心</span><b><span id="mDistract">1</span><u>次</u></b></div>
           <div><span>最长连续</span><b id="mStreak">12:30</b></div>
           <div><span>离座</span><b id="mAway">0:00</b></div>
-          <div><span>停笔</span><b><span id="mPause">0</span><u>次</u></b></div>
+          <div><span>走神</span><b><span id="mGaze">0</span><u>次</u></b></div>
         </div>
       </section>
 
       <section class="glass pad">
         <div class="card-h">
           <h3>传感信号</h3>
-          <div class="tag" id="tagScene">场景 A · 眼神未启用</div>
+          <div class="tag" id="tagScene">眼神 + 头姿</div>
         </div>
         <div class="sig" id="sig"></div>
       </section>
@@ -392,9 +389,9 @@ body{
       <section class="glass pad insight">
         <div class="insight-h">
           <h3>一句结论</h3>
-          <span class="src">归因 · 停笔时长聚类</span>
+          <span class="src">归因 · 视线游走聚类</span>
         </div>
-        <p id="insightTx">你的分心集中在<b>开始后的第 3 分钟</b>，那一段你停笔了 1 分 40 秒。可能是卡住了，不是不专心。</p>
+        <p id="insightTx">有 <b>3 次</b>你的眼睛离开屏幕超过 2 秒，最长一次 6 秒。头没动，眼睛飘走了。</p>
       </section>
 
     </aside>
@@ -428,13 +425,12 @@ const SLOT = 5;
 const SLOTS = 60;
 
 const S = {
-  remain: TOTAL - 270, running: true, scene: 'paper',
+  remain: TOTAL - 270, running: true,
   score: 92, blocks: [],
-  distract: 3, pauseCount: 2, awaySec: 0,
+  distract: 3, gazeCount: 3, awaySec: 0,
   streak: 100, streakMax: 200,
   blink: 16, dist: 56,
   gaze: 'stable', gazeT: 0,
-  hand: 'writing', pauseSince: 0,
   camOn: false,
 };
 
@@ -508,25 +504,15 @@ function pushBlock() {
 function renderSignals() {
   const rows = [];
 
-  if (S.scene === 'paper') {
-    rows.push({
-      icon: '✍', name: '书写节律',
-      desc: S.hand === 'writing' ? '手部关键点持续运动' : '手未入镜时精度会降低',
-      val: S.hand === 'writing' ? '书写中' : '停笔 ' + fmt(S.pauseSince),
-      cls: S.hand === 'paused' ? 'hot' : '',
-    });
-    rows.push({ icon: '⌄', name: '低头姿势', desc: '连续低头时长与颈椎负荷', val: Math.max(1, Math.round((TOTAL - S.remain) / 60)) + ' 分钟', cls: '' });
-  } else {
-    rows.push({
-      icon: '◎', name: '眼神',
-      desc: S.gaze === 'stable' ? '眼在眶中央，扫视正常'
-          : S.gaze === 'drift' ? '眼头不一致，视线已偏离'
-          : '8 秒无跳视，疑似盯着不读',
-      val: S.gaze === 'stable' ? '稳定' : S.gaze === 'drift' ? '偏移' : '凝固',
-      cls: S.gaze === 'drift' ? 'hot' : S.gaze === 'stare' ? 'cool' : '',
-    });
-    rows.push({ icon: '⌄', name: '头姿', desc: '相对基线 yaw / pitch', val: '2.4°', cls: '' });
-  }
+  rows.push({
+    icon: '◎', name: '眼神',
+    desc: S.gaze === 'stable' ? '眼在眶中央，扫视正常'
+        : S.gaze === 'drift' ? '眼头不一致，视线已偏离'
+        : '8 秒无跳视，疑似盯着不读',
+    val: S.gaze === 'stable' ? '稳定' : S.gaze === 'drift' ? '偏移' : '凝固',
+    cls: S.gaze === 'drift' ? 'hot' : S.gaze === 'stare' ? 'cool' : '',
+  });
+  rows.push({ icon: '⌄', name: '头姿', desc: '相对基线 yaw / pitch', val: '2.4°', cls: '' });
 
   rows.push({
     icon: '◡', name: '眨眼',
@@ -560,7 +546,7 @@ function updateHUD() {
   $('mDistract').textContent = S.distract;
   $('mStreak').textContent = fmt(S.streakMax);
   $('mAway').textContent = fmt(S.awaySec);
-  $('mPause').textContent = S.pauseCount;
+  $('mGaze').textContent = S.gazeCount;
 
   const lv = level(S.score);
   $('scoreNum').textContent = r0(S.score);
@@ -575,29 +561,18 @@ function updateHUD() {
 
 /* 模拟 */
 function simulate() {
-  const target = S.scene === 'paper'
-    ? (S.hand === 'paused' ? 58 : 90)
-    : (S.gaze === 'drift' ? 52 : S.gaze === 'stare' ? 61 : 91);
+  const target = S.gaze === 'drift' ? 52 : S.gaze === 'stare' ? 61 : 91;
   S.score += (target - S.score) * 0.06 + (Math.random() - 0.5) * 0.7;
   S.score = clamp(S.score, 28, 99);
 
   if (S.score >= 65) { S.streak += 1; S.streakMax = Math.max(S.streakMax, S.streak); }
   else S.streak = 0;
 
-  if (S.scene === 'paper') {
-    if (S.hand === 'writing' && Math.random() < 0.002) {
-      S.hand = 'paused'; S.pauseSince = 0; S.pauseCount++;
-    } else if (S.hand === 'paused') {
-      S.pauseSince += 1;
-      if (S.pauseSince > 26) { S.hand = 'writing'; S.distract++; }
-    }
-  } else {
-    if (S.gaze === 'stable' && Math.random() < 0.0014) {
-      S.gaze = Math.random() < 0.6 ? 'drift' : 'stare'; S.gazeT = 0;
-    } else if (S.gaze !== 'stable') {
-      S.gazeT += 1;
-      if (S.gazeT > 7) { S.gaze = 'stable'; S.distract++; }
-    }
+  if (S.gaze === 'stable' && Math.random() < 0.0014) {
+    S.gaze = Math.random() < 0.6 ? 'drift' : 'stare'; S.gazeT = 0; S.gazeCount++;
+  } else if (S.gaze !== 'stable') {
+    S.gazeT += 1;
+    if (S.gazeT > 7) { S.gaze = 'stable'; S.distract++; }
   }
 
   S.blink += (16 + Math.sin(Date.now() / 9000) * 3 - S.blink) * 0.02 + (Math.random() - .5) * .25;
@@ -629,30 +604,6 @@ $('btnEnd').addEventListener('click', () => {
   S.running = false;
   $('btnPause').textContent = '继续';
   toast('会话已结束，正在生成报告…');
-});
-
-$('seg').addEventListener('click', (e) => {
-  const b = e.target.closest('button');
-  if (!b) return;
-  [...$('seg').children].forEach(x => x.classList.remove('on'));
-  b.classList.add('on');
-  S.scene = b.dataset.scene;
-  if (S.scene === 'paper') {
-    $('hSub').textContent = '纸质学习 · 写字 / 看书';
-    $('tagScene').textContent = '场景 A · 眼神未启用';
-    $('fHint').textContent = '识别到书写节律，判定为正常学习中';
-    $('insightTx').innerHTML = '你的分心集中在<b>开始后的第 3 分钟</b>，那一段你停笔了 1 分 40 秒。可能是卡住了，不是不专心。';
-    S.hand = 'writing';
-  } else {
-    $('hSub').textContent = '电脑学习 · 看网课 / 刷题';
-    $('tagScene').textContent = '场景 B · 手部降频';
-    $('fHint').textContent = '眼神引擎已启用，免校准模式';
-    $('insightTx').innerHTML = '有 <b>3 次</b>你的眼睛离开屏幕超过 2 秒，最长一次 6 秒。头没动，眼睛飘走了。';
-    S.gaze = 'stable';
-  }
-  renderSignals();
-  updateHUD();
-  toast(S.scene === 'paper' ? '已切换到纸质学习：眼神判定关闭，改用停笔' : '已切换到电脑学习：眼神判定启用');
 });
 
 /* 摄像头（可选，失败自动回落演示数据） */
@@ -721,11 +672,6 @@ renderSignals();
 updateRing();
 updateHUD();
 setInterval(renderSignals, 900);
-
-/* 支持 #screen 直接打开电脑学习场景，方便截图与演示 */
-if (location.hash === '#screen') {
-  document.querySelector('#seg [data-scene="screen"]').click();
-}
 </script>
 </body>
 </html>
