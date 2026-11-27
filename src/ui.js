@@ -107,6 +107,8 @@ function bindNav() {
   document.body.addEventListener('click', (ev) => {
     const nav = ev.target.closest('[data-nav]');
     if (nav) { switchView(nav.dataset.nav); return; }
+    const ph = ev.target.closest('[data-open-phone]');
+    if (ph) { setMoreMenu(false); actions.openPhoneCard && actions.openPhoneCard(); return; }
     const op = ev.target.closest('[data-open-plugin]');
     if (op) { actions.openPlugin && actions.openPlugin(op.dataset.openPlugin); return; }
     const calf = ev.target.closest('[data-action="calibrate-fine"]');

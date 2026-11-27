@@ -1372,3 +1372,13 @@ input[type="range"]::-webkit-slider-thumb {
 .cam-locked .mode-btn[data-mode="head"] {
   opacity: .4; pointer-events: none;
 }
+
+/* 从「手机摄像头」入口跳过来时高亮一下卡片 */
+.phone-card.flash {
+  animation: phoneFlash 1.7s var(--ease);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+@keyframes phoneFlash {
+  0%, 100% { box-shadow: none; }
+  35% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+}

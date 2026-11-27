@@ -80,6 +80,10 @@
             <svg viewBox="0 0 24 24"><path d="M10 4.2a2.2 2.2 0 0 1 4 0c0 1.1.9 1.8 2 1.8h2.4v3.2c0 1.1.7 2 1.8 2a2.2 2.2 0 0 1 0 4c-1.1 0-1.8.9-1.8 2V21h-3.2c-1.1 0-2 .7-2 1.8"/><path d="M10 4.2V7c0 1.1-.9 1.8-2 1.8H5.6v3.4c0 1.1-.7 2-1.8 2"/><path d="M3.8 15.2h1.9c1.1 0 2 .9 2 2v3.6h4.3"/></svg>
             <span>插件中心</span>
           </button>
+          <button class="rail-btn" data-open-phone data-gaze>
+            <svg viewBox="0 0 24 24"><rect x="7" y="2.6" width="10" height="18.8" rx="2.6"/><circle cx="12" cy="18.4" r="1.1"/><path d="M10.4 5.2h3.2"/></svg>
+            <span>手机摄像头</span>
+          </button>
           <button class="rail-btn" data-view="settings" data-gaze>
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
             <span>设置</span>
@@ -168,6 +172,7 @@
                 <div class="onboard-actions">
                   <button class="btn primary" id="btnOnboardPrimary" data-gaze>启动相机并加载模型</button>
                   <button class="btn ghost" id="btnOnboardDemo">先看演示模式</button>
+                  <button class="btn ghost" data-open-phone data-gaze>没有摄像头？用手机</button>
                 </div>
                 <div class="onboard-help" id="onboardHelp" hidden>
                   <b>按这三步恢复摄像头</b>
@@ -668,7 +673,7 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.6.0</span></div>
+          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.6.1</span></div>
           <p class="body-text">EyePilot · 瞳行，校园黑客松参赛作品。技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移特征 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件，普通笔记本摄像头即可运行。</p>
           <p class="fine">本作品不构成医疗建议。若持续眼干、眼痛或视力模糊，请就医。</p>
         </div>

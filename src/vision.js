@@ -248,12 +248,36 @@ export class VisionEngine {
     });
     await this.video.play();
     this.syncCanvasSize();
+
+    // 有些设备能打开却永远不给帧：虚拟摄像头没源、隐私开关拦住、镜头被物理遮挡。
+    // 之前这里直接标「就绪」，界面显示摄像头正常但画面是黑的、0 fps，很难排查。
+    const label = (stream.getVideoTracks()[0] || {}).label || '';
+    try {
+      await this.waitFirstFrame(3000);
+    } catch {
+      this.stop();
+      throw new Error(`NO_FRAMES:${label}`);
+    }
+
     this.running = true;
     this.lastVideoTime = -1;
     this.onStatus({ stage: 'camera', state: 'ready' });
     this.onStatus({ stage: 'run', state: 'running' });
     this.loop();
     return stream;
+  }
+
+  /** 等到第一帧真正到货；超时就当失败 */
+  waitFirstFrame(timeoutMs = 3000) {
+    return new Promise((resolve, reject) => {
+      const t0 = performance.now();
+      const tick = () => {
+        if (this.video.videoWidth > 0 && this.video.readyState >= 2) { resolve(); return; }
+        if (performance.now() - t0 > timeoutMs) { reject(new Error('no-frame')); return; }
+        setTimeout(tick, 120);
+      };
+      tick();
+    });
   }
 
   syncCanvasSize() {

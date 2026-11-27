@@ -229,6 +229,14 @@ function onVisionStatus(s) {
 }
 
 function friendlyError(err) {
+  const raw = (err && err.message) || '';
+  if (raw.startsWith('NO_FRAMES')) {
+    const label = raw.split(':')[1] || '';
+    return `摄像头已经打开，但 3 秒内一帧画面都没拿到${label ? `（当前设备：${label}）` : ''}。`
+      + '常见原因：选到了虚拟摄像头（OBS、会议软件的虚拟相机）、镜头被物理遮挡、'
+      + 'Windows 相机隐私开关关掉了桌面应用，或者驱动异常。'
+      + '可以在设置里换一个摄像头重试；如果这台电脑没有可用摄像头，直接用「手机当摄像头」。';
+  }
   if (window.self !== window.top) {
     return '页面正在预览窗口 / iframe 中打开，浏览器会拦截摄像头。请复制下方地址，用 Edge 或 Chrome 新标签页直接打开。';
   }
@@ -586,6 +594,18 @@ const actions = {
     return r;
   },
   openTour: () => openTour(),
+  /** 直接跳到「手机双摄」卡片：没有可用摄像头的人不该先学会找设置 */
+  openPhoneCard: () => {
+    showView('settings');
+    if (phoneLink && !phoneLink.active) actions.startPhoneLink();
+    setTimeout(() => {
+      const card = document.querySelector('.phone-card');
+      if (!card) return;
+      card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      card.classList.add('flash');
+      setTimeout(() => card.classList.remove('flash'), 1900);
+    }, 240);
+  },
   revokeCamera: () => {
     resetCameraConsent();
     setCameraLocked(true);
