@@ -17,6 +17,9 @@ import { HealthMonitor } from './health-monitor.js';
 import { AICoach, buildReport, assessLocal } from './ai.js';
 import { pluginHost, renderPluginGrid, closePanel, openPlugin } from './plugins.js';
 import { download } from './utils.js';
+import {
+  initOnboarding, bootGate, askCamera, maybeTour, openTour, setCameraLocked, resetCameraConsent,
+} from './onboarding.js';
 import { fitAffine1D } from './core/math.js';
 import { DemoEngine, seedDemoData } from './demo.js';
 
@@ -253,6 +256,18 @@ function friendlyError(err) {
 async function startCamera() {
   if (app.mode === 'demo') stopDemo();
   if (vision.running) { calibrate(); return; }
+
+  // 真正调摄像头之前先问：不同意就只保留计时 / 护眼 / 提醒
+  const allowed = await askCamera();
+  if (!allowed) {
+    setCameraLocked(true);
+    setStatus('cam', 'warn', '未授权摄像头');
+    setOnboard('camera');
+    setPrimaryButton('需要摄像头授权', false);
+    ui.toast('未授权摄像头', '眼控、疲劳分析不可用；计时、专注会话、护眼操和提醒照常工作。', 'warn', 6500);
+    return;
+  }
+  setCameraLocked(false);
   setOnboard('loading');
   setPrimaryButton('加载中…', true);
   setStatus('model', 'warn', '模型加载中');
@@ -570,6 +585,17 @@ const actions = {
     refreshPhoneUi();
     return r;
   },
+  openTour: () => openTour(),
+  revokeCamera: () => {
+    resetCameraConsent();
+    setCameraLocked(true);
+    ui.updateCamConsent(app.settings.cameraConsent || '');
+    notifyAlert({
+      level: 'info',
+      title: '已撤销摄像头授权',
+      detail: '眼控、疲劳分析暂停；计时、专注会话与护眼提醒继续。下次点「启动相机」会重新询问。',
+    });
+  },
   setHeadOnly: (on) => {
     saveSettings({ headOnly: !!on });
     tracker.setHeadConfig({ only: !!on });
@@ -745,6 +771,8 @@ function islandPayload() {
     session: sec,
     nextBreak: Math.round(left / 1000),
     focusSession: focusSession.snapshot(),
+    // 护眼弹层是否打开：岛上据此强制收起，避免一起挡屏幕
+    breakOpen: !!(document.getElementById('breakOverlay') || {}).classList?.contains('open'),
     alert: a ? { level: a.level, title: a.title, detail: a.detail, ts: a.ts || Date.now() } : null,
     ts: Date.now(),
   };
@@ -830,6 +858,11 @@ function boot() {
   demo = new DemoEngine({ overlay, onFrame: handleDemoFrame });
 
   ui.init(actions);
+  initOnboarding({ setView: showView });
+  // 须知放在这里显示：DOM 已就绪，同时还在首帧渲染之前
+  const gateDone = bootGate();
+  setCameraLocked((app.settings.cameraConsent || '') === 'denied');
+  gateDone.then(() => maybeTour());
 
   // 必须在 ui.init 之后创建：校准器需要读取已缓存的 DOM 元素
   calibrator = new Calibrator({

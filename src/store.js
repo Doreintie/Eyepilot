@@ -28,6 +28,10 @@ export const DEFAULT_SETTINGS = {
   systemCursor: false,
   // 手机互联：off 关闭 / fuse 融合 / only 仅手机
   phoneMode: 'off',
+  // 隐私相关：'' 未询问 / 'granted' 已允许 / 'denied' 已拒绝
+  cameraConsent: '',
+  noticeSeen: false,
+  tourDone: false,
   phoneWeight: 55,
   phoneCal: { x: { a: 1, b: 0 }, y: { a: 1, b: 0 } },
   headZeroYaw: 0,

@@ -86,7 +86,7 @@
           </button>
         </div>
         <button class="rail-btn rail-more-toggle" id="btnRailMore" data-gaze aria-expanded="false" aria-haspopup="true">
-          <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+          <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="1.7"/><circle cx="12" cy="6" r="1.7"/><circle cx="18" cy="6" r="1.7"/><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/><circle cx="6" cy="18" r="1.7"/><circle cx="12" cy="18" r="1.7"/><circle cx="18" cy="18" r="1.7"/></svg>
           <span>更多</span>
         </button>
       </div>
@@ -658,10 +658,17 @@
               <button class="btn ghost sm" id="btnWipe">清除全部数据</button>
             </span>
           </div>
+          <div class="row-between" style="margin-top:10px">
+            <span class="fine" id="camConsentState">摄像头授权：未询问</span>
+            <span>
+              <button class="btn ghost sm" id="btnReplayTour">重看使用教程</button>
+              <button class="btn ghost sm" id="btnRevokeCam">撤销摄像头授权</button>
+            </span>
+          </div>
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.5.0</span></div>
+          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.6.0</span></div>
           <p class="body-text">EyePilot · 瞳行，校园黑客松参赛作品。技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移特征 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件，普通笔记本摄像头即可运行。</p>
           <p class="fine">本作品不构成医疗建议。若持续眼干、眼痛或视力模糊，请就医。</p>
         </div>
@@ -747,5 +754,55 @@
 <canvas id="lightCanvas" width="64" height="48" hidden></canvas>
 
 <script type="module" src="./src/main.js"></script>
+
+<!-- ============ 启动须知 / 摄像头授权 / 首次教程 ============ -->
+<div class="gate" id="bootGate" role="dialog" aria-modal="true" aria-labelledby="bootGateTitle">
+  <div class="gate-card">
+    <span class="eyebrow">BEFORE YOU START</span>
+    <h2 id="bootGateTitle">开始前，先说清楚</h2>
+    <ul class="gate-list">
+      <li><b>画面不出这台电脑</b>：摄像头帧只在本地内存里推理，不上传、不录制、不保存。</li>
+      <li><b>不授权也能用</b>：计时、专注会话、护眼操和提醒不需要摄像头；眼控与疲劳分析需要。</li>
+      <li><b>随时可撤销</b>：设置 → 数据与隐私，可关闭摄像头、清除全部本地数据。</li>
+    </ul>
+    <button class="btn primary" id="bootGateEnter" disabled>正在进入…</button>
+    <p class="fine" id="bootGateTip">1 秒后自动进入</p>
+  </div>
+</div>
+
+<div class="gate" id="cameraGate" role="dialog" aria-modal="true" aria-labelledby="cameraGateTitle">
+  <div class="gate-card">
+    <span class="eyebrow">CAMERA PERMISSION</span>
+    <h2 id="cameraGateTitle">允许使用摄像头吗？</h2>
+    <p class="gate-lead">眼控、专注判定和疲劳分析都需要读取摄像头画面。是否允许由你决定。</p>
+    <ul class="gate-list">
+      <li>画面<b>只在本地处理</b>，不上传、不录制、不写入磁盘。</li>
+      <li>只在你点「启动相机」或开始专注时才开启，随时可以关。</li>
+      <li>拒绝后仍可使用<b>计时、护眼操、用眼提醒</b>等基础功能。</li>
+    </ul>
+    <label class="gate-remember"><input type="checkbox" id="cameraRemember" checked /> 记住我的选择，下次不再询问</label>
+    <div class="gate-actions">
+      <button class="btn ghost" id="cameraDeny">暂不开启</button>
+      <button class="btn primary" id="cameraAllow">允许并开启</button>
+    </div>
+    <p class="fine">之后可在「设置 → 数据与隐私」里修改。</p>
+  </div>
+</div>
+
+<div class="gate" id="tourGate" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+  <div class="gate-card tour-card">
+    <div class="tour-top">
+      <span class="eyebrow" id="tourKicker">TOUR 1 / 5</span>
+      <button class="btn link sm" id="tourSkip">跳过教程</button>
+    </div>
+    <h2 id="tourTitle">专注会话</h2>
+    <p class="gate-lead" id="tourText">25 分钟一轮。眼睛离开屏幕、坐姿垮掉、眨眼变少，都会计入这一轮的分数。</p>
+    <div class="tour-dots" id="tourDots"></div>
+    <div class="gate-actions">
+      <button class="btn ghost" id="tourPrev">上一步</button>
+      <button class="btn primary" id="tourNext">下一步</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

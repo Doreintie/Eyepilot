@@ -26,3 +26,6 @@ certs/
 
 # 临时测试包
 tools/_pkt.tmp
+
+# 安装包构建产物
+desktop/installer-out/

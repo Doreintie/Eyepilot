@@ -1319,3 +1319,56 @@ input[type="range"]::-webkit-slider-thumb {
 /* 鼠标接管时压暗眼控光标，避免「两个指针」的错觉 */
 .mouse-hold #eyeCursor, .mouse-hold #dwellRing { opacity: .22 !important; }
 .mouse-hold #eyeCursor { transition: opacity .2s; }
+
+/* ===================== v1.6.0：须知 / 授权 / 教程 ===================== */
+
+.gate {
+  position: fixed; inset: 0; z-index: 9800; display: none;
+  place-items: center; padding: 20px;
+  background: rgba(3, 6, 11, .82); backdrop-filter: blur(10px);
+}
+.gate.open { display: grid; animation: viewIn .2s var(--ease); }
+.gate.out { animation: gateOut .26s var(--ease) forwards; }
+@keyframes gateOut { to { opacity: 0; visibility: hidden; } }
+
+.gate-card {
+  width: min(520px, 92vw); max-height: 88vh; overflow: auto;
+  padding: 26px 26px 20px;
+  background: var(--panel); border: 1px solid var(--line-2);
+  border-radius: 16px; box-shadow: 0 40px 90px -40px #000;
+  animation: modalIn .3s var(--ease);
+}
+.gate-card h2 { font-size: 21px; margin: 8px 0 10px; letter-spacing: -.02em; }
+.gate-lead { font-size: 12.5px; color: var(--muted); line-height: 1.75; margin: 0 0 12px; }
+.gate-list { margin: 0 0 16px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+.gate-list li {
+  position: relative; padding-left: 16px; font-size: 12.5px; line-height: 1.7; color: var(--muted);
+}
+.gate-list li::before {
+  content: ""; position: absolute; left: 0; top: 7px; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--accent); opacity: .8;
+}
+.gate-list b { color: var(--text); font-weight: 500; }
+.gate-card .btn.primary { width: 100%; height: 44px; }
+.gate-card .btn.primary:disabled { opacity: .55; cursor: default; }
+.gate-card .fine { text-align: center; margin-top: 9px; }
+.gate-remember { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--muted); margin-bottom: 14px; }
+.gate-remember input { accent-color: var(--accent); width: 14px; height: 14px; }
+.gate-actions { display: flex; gap: 8px; }
+.gate-actions .btn { flex: 1; }
+.gate-actions .btn.primary { width: auto; }
+
+.tour-card { width: min(460px, 92vw); }
+.tour-top { display: flex; align-items: center; justify-content: space-between; }
+.tour-dots { display: flex; gap: 6px; margin: 14px 0 16px; }
+.tour-dots i {
+  width: 18px; height: 3px; border-radius: 2px; background: var(--line-2); transition: background .2s;
+}
+.tour-dots i.on { background: var(--accent); }
+
+/* 未授权摄像头时，眼控入口统一置灰 */
+.cam-locked .mode-btn[data-mode="eye"],
+.cam-locked .mode-btn[data-mode="hybrid"],
+.cam-locked .mode-btn[data-mode="head"] {
+  opacity: .4; pointer-events: none;
+}

@@ -69,6 +69,13 @@
   }
   .focus-chip.show { display: inline-flex; }
   .focus-chip b { font-weight: 500; }
+  /* 护眼提醒只在收起条里说一句，不替用户展开面板 */
+  .alert-line {
+    display: none; max-width: 128px; overflow: hidden; white-space: nowrap;
+    text-overflow: ellipsis; font-size: 10.5px; color: var(--amber);
+  }
+  .bar.alerting .alert-line { display: block; }
+  .bar.alerting .blink, .bar.alerting .focus-chip { display: none; }
   .mode.on {
     color: #06110f; background: var(--accent); border-color: var(--accent); font-weight: 700;
   }
@@ -142,6 +149,7 @@
       <i class="dot idle" id="dot"></i>
       <div class="blink"><b id="blink">--</b><span>次/分</span></div>
       <div class="focus-chip" id="focusChip" title="专注会话剩余时间"><b>--:--</b></div>
+      <div class="alert-line" id="alertLine"></div>
       <div class="modes">
         <button class="mode" data-mode="eye" title="纯眼控：虹膜决定光标，鼠标随时可接管">眼</button>
         <button class="mode" data-mode="hybrid" title="眼 + 鼠：眼睛和鼠标同时有效">混</button>
@@ -252,6 +260,17 @@
     return 'on';
   }
 
+  let barAlertTimer = 0;
+  function showBarAlert(text) {
+    const bar = document.querySelector('.bar');
+    const line = $('alertLine');
+    if (!bar || !line) return;
+    line.textContent = text || '该休息了';
+    bar.classList.add('alerting');
+    clearTimeout(barAlertTimer);
+    barAlertTimer = setTimeout(() => bar.classList.remove('alerting'), 8000);
+  }
+
   function render(p) {
     const lv = levelOf(p);
     $('dot').className = 'dot ' + (lv === 'on' ? '' : lv);
@@ -289,11 +308,14 @@
       const box = $('alert');
       box.className = 'alert show' + (p.alert.level === 'bad' ? ' bad' : '');
       $('alertText').textContent = `${p.alert.title}：${p.alert.detail || ''}`.slice(0, 80);
-      if (!preview && !expanded) {
-        setExpanded(true);
-        clearTimeout(peekTimer);
-        peekTimer = setTimeout(() => { if (!manual) setExpanded(false); }, 5000);
-      }
+      // 提醒只在收起条里亮一行，绝不替用户把面板拉开——之前就是这一步挡住屏幕
+      showBarAlert(p.alert.title);
+    }
+
+    // 护眼弹层打开时强制收起，避免「弹层 + 岛」一起挡屏
+    if (p.breakOpen && expanded) {
+      manual = false;
+      setExpanded(false);
     }
   }
 

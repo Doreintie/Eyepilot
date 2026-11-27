@@ -40,6 +40,7 @@ const ids = [
   'modePill', 'headConfig', 'setHeadH', 'setHeadV', 'setHeadDead', 'setHybrid',
   'headHHint', 'headVHint', 'headDeadHint', 'hybridHint', 'hybridRow', 'modeHint',
   'btnRecenter', 'setSystemCursor', 'setHeadOnly',
+  'btnReplayTour', 'btnRevokeCam', 'camConsentState',
   'phonePill', 'phoneUrl', 'phoneDetail', 'phoneWeightHint', 'setPhoneWeight',
   'btnPhoneLan', 'btnPhoneCopy', 'btnPhoneAlign', 'btnPhoneReset',
   'setIsland', 'isBlink', 'isSession', 'isFatigue', 'isHealth', 'isBreak',
@@ -671,6 +672,13 @@ function bindCare() {
 
 /* ---------------- 手机双摄 ---------------- */
 
+/** 摄像头授权状态：未询问 / 已允许 / 已拒绝 */
+export function updateCamConsent(state) {
+  if (!E.camConsentState) return;
+  const map = { granted: '已允许', denied: '已拒绝（眼控不可用）' };
+  E.camConsentState.textContent = `摄像头授权：${map[state] || '未询问'}`;
+}
+
 /** 鼠标接管期间：把眼控光标与注视环压暗，给一个「现在轮到鼠标」的信号 */
 export function setMouseHold(on) {
   document.documentElement.classList.toggle('mouse-hold', !!on);
@@ -927,6 +935,7 @@ function applySettingsToForm() {
   if (E.setHybrid) E.setHybrid.value = String(s.hybridRange || 110);
   if (E.setSystemCursor) E.setSystemCursor.checked = !!s.systemCursor;
   if (E.setHeadOnly) E.setHeadOnly.checked = !!s.headOnly;
+  updateCamConsent(s.cameraConsent || '');
   const isl = s.island || {};
   const items = isl.items || {};
   if (E.setIsland) E.setIsland.checked = isl.enabled !== false;
@@ -1075,6 +1084,12 @@ function bindSettings() {
         toast('网页版无法接管系统鼠标', '桌面版（EyePilot.exe）才支持程序外控制', 'warn', 4500);
       }
     });
+  }
+  if (E.btnReplayTour) {
+    E.btnReplayTour.addEventListener('click', () => actions.openTour && actions.openTour());
+  }
+  if (E.btnRevokeCam) {
+    E.btnRevokeCam.addEventListener('click', () => actions.revokeCamera && actions.revokeCamera());
   }
   if (E.setHeadOnly) {
     E.setHeadOnly.addEventListener('change', () => {
@@ -1352,6 +1367,7 @@ Object.assign(ui, {
   updateAutoUI,
   updateModeUI,
   updatePhoneUI,
+  updateCamConsent,
   setMouseHold,
   startAlign,
   toast,

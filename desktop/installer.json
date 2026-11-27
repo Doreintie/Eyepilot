@@ -1,0 +1,35 @@
+{
+  "appId": "cn.hackathon.eyepilot",
+  "productName": "EyePilot",
+  "copyright": "EyePilot · 瞳行",
+  "directories": {
+    "output": "installer-out"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "icon": "icon.ico",
+    "artifactName": "EyePilot-install-${version}.exe"
+  },
+  "nsis": {
+    "oneClick": true,
+    "perMachine": false,
+    "allowElevation": false,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "EyePilot",
+    "runAfterFinish": true,
+    "deleteAppDataOnUninstall": false,
+    "installerIcon": "icon.ico",
+    "uninstallerIcon": "icon.ico"
+  },
+  "extraMetadata": {
+    "name": "EyePilot"
+  }
+}

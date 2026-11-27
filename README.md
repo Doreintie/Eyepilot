@@ -5,23 +5,20 @@
 AI 眼动交互 + 用眼健康监测的桌面 Web 应用。不需要 Tobii 之类的红外眼动仪，笔记本自带的摄像头就够；所有画面在本机浏览器里处理，不上传。
 
 > 校园黑客松参赛作品 · 主题「AI + 眼动交互 / 视觉健康」
-> **当前版本 v1.5.0** · [更新记录](CHANGELOG.md)
+> **当前版本 v1.6.0** · [更新记录](CHANGELOG.md)
 
 ---
 
-## 本版更新（v1.5.0 · 2026-11-27）
+## 本版更新（v1.6.0 · 2026-11-27）
 
-**重心从「眼控」转到「自律 / 护眼」**，并修掉四模式与鼠标互抢的老问题。
+**把隐私说明和「第一次用」补齐**，并修掉灵动岛挡屏。
 
-- **默认落在专注会话**，导航变成 专注会话 → 护眼 → 用眼健康 → AI 教练 → 控制台；
-  新装默认**纯鼠标**，眼控变成按需开启的输入方式。
-- **鼠标永远可用**：纯眼控 / 眼 + 鼠 / 眼 + 头 / 纯鼠标 四种输入方式，
-  鼠标一动眼控立刻让位（0.3–1.2 秒），停手自动交还，不会再出现「两个指针互抢」。
-- **灵动岛**：模式补到四个（眼 / 混 / 头 / 鼠），收起态显示专注会话剩余时间，
-  展开态多一行「专注会话 · 剩余 · 专注分 · 等级」。
-- **手机连接从五步降到两步**：桌面版启动即开局域网并自动订阅，`启动.bat` 默认带 `--lan`，
-  手机第一帧到达时自动切到「眼 + 鼠」。
-- 恢复 **demo / desktop 两个分发包**（exe 启动方式与 v1.4.0 及以前一致）。
+- **启动须知**：打开程序先显示 1 秒——画面不出本机 / 不授权也能用 / 随时可撤销。
+- **摄像头授权**：真正调 `getUserMedia` 之前弹窗询问，可记住选择；**拒绝就降级运行**——
+  眼控三个模式置灰，计时、专注会话、护眼操、用眼提醒照常。
+- **首次教程**：5 步引导（专注 / 护眼 / 输入方式 / 本地数据 / 灵动岛），可跳过、可在设置重看。
+- **灵动岛**：护眼提醒只在收起条里亮一行，不再自动展开挡屏幕；护眼弹层出现时强制收起。
+- **一键安装**：`EyePilot-install-1.6.0.exe`，装到当前用户目录，不需要管理员权限。
 
 ## 30 秒了解
 
@@ -57,7 +54,7 @@ AI 眼动交互 + 用眼健康监测的桌面 Web 应用。不需要 Tobii 之�
 | 体积 | 约 148 MB（自带 Chromium） | 约 21 MB（用系统浏览器） |
 | 适合 | 答辩现场、自己电脑 | 微信/QQ 传给别人、快速体验 |
 
-两个包都在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 里：`EyePilot-Desktop-v1.5.0-win64.zip` / `EyePilot-Demo-v1.5.0-win64.zip`。
+三个包都在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 里：`EyePilot-install-1.6.0.exe`（一键安装）/ `EyePilot-Desktop-v1.6.0-win64.zip`（免安装）/ `EyePilot-Demo-v1.6.0-win64.zip`（网页版）。
 
 **网页版**自带官方 Python 便携运行时（`runtime/`），收件人不需要安装 Python；系统里已有 Python 也会自动复用。
 
@@ -368,7 +365,7 @@ eyepilot/
 
 两个打包产物体积超过 Git 仓库的常规范围，不随源码提交，放在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 附件里。按对方情况选一个发：
 
-**1. 桌面版 `EyePilot-Desktop-v1.5.0-win64.zip`（约 148 MB）**
+**1. 一键安装 `EyePilot-install-1.6.0.exe`（约 143 MB）**
 
 - 解压后双击 `EyePilot.exe`，独立窗口运行，看不到浏览器地址栏。
 - 摄像头权限由应用自己处理，不会弹浏览器的权限框。
@@ -377,7 +374,9 @@ eyepilot/
   或右键压缩包 → 属性 → 勾选“解除锁定”再解压。
 - 微信若提示超过 100 MB，改用 QQ / 网盘发送，或发下面的网页版。
 
-**2. 网页版 `EyePilot-Demo-v1.5.0-win64.zip`（约 21 MB）**
+**2. 免安装 `EyePilot-Desktop-v1.6.0-win64.zip`（约 178 MB）**
+
+**3. 网页版 `EyePilot-Demo-v1.6.0-win64.zip`（约 37 MB）**
 
 - 解压后双击 `启动.bat`，会自动打开默认浏览器。
 - 自带 Python 运行时，无需安装、无需联网（模型已本地化）。
@@ -397,7 +396,7 @@ eyepilot/
 python serve.py
 ```
 
-需要“解压即用”的免安装包，请到 [Releases](https://github.com/Doreintie/Eyepilot/releases) 下载 `EyePilot-Demo-v1.5.0-win64.zip`。
+需要“解压即用”的免安装包，请到 [Releases](https://github.com/Doreintie/Eyepilot/releases) 下载 `EyePilot-Demo-v1.6.0-win64.zip`。
 
 ---
 
