@@ -1,7 +1,7 @@
 /* 纯算法层单测：node tools/test-core.mjs */
 import {
   fitRidge, predictRidge, buildFeatureVector, OneEuroFilter, medianVector, linearTrend, clamp,
-  fitAffine1D, FEATURE_VERSION, featureDim,
+  fitAffine1D, FEATURE_VERSION, featureDim, robustAggregate,
 } from '../src/core/math.js';
 import { encodeFrame, decodeFrame, toResult, PACKET_BYTES, LM_COUNT } from '../src/net/protocol.js';
 import { fuseTwo, disagreement } from '../src/core/fusion.js';
@@ -9,6 +9,7 @@ import {
   computePerclos, computeBlinkRate, computeBlinkStats, computeFocus, computeFatigue,
   computeHealthScore, estimateDistanceCm, lumaToLux, eyeOpenness,
 } from '../src/core/health.js';
+import { buildReport, reportToMarkdown } from '../src/ai.js';
 
 let pass = 0, fail = 0;
 function ok(name, cond, extra = '') {
@@ -64,6 +65,33 @@ console.log('\n[2b] 仿射校正（校准残余误差）');
   ok('增益被夹紧在安全范围', bad.a >= 0.55 && bad.a <= 1.8, `a=${bad.a}`);
   ok('偏移被夹紧在安全范围', Math.abs(bad.b) <= 0.35, `b=${bad.b}`);
   ok('点数不足时不做校正', fitAffine1D([0, 1], [0, 1]).a === 1);
+
+  // 一个留出点采集失败（眨眼/误视）曾把增益和偏移同时推到 clamp 边界，
+  // 在 1920px 屏上造成约 466px 的系统性偏差。鲁棒拟合必须抗住。
+  const vx = [0.26, 0.74, 0.32, 0.70, 0.50];
+  const truth = vx.map((x) => 1.04 * x - 0.02);
+  const dirty = truth.map((y, i) => (i === 2 ? 0.9 : y));
+  const robust = fitAffine1D(vx, dirty);
+  ok('单离群点：增益不被拉飞', close(robust.a, 1.04, 0.06), `a=${robust.a}`);
+  ok('单离群点：偏移不被拉飞', close(robust.b, -0.02, 0.05), `b=${robust.b}`);
+  const maxErrPx = Math.max(...vx.map((x, i) => Math.abs(robust.a * x + robust.b - truth[i]))) * 1920;
+  ok('单离群点：最大误差 < 80px（原 466px）', maxErrPx < 80, `${Math.round(maxErrPx)}px`);
+  ok('干净数据仍然精确', close(fitAffine1D(vx, truth).a, 1.04, 1e-6));
+  ok('两个离群点：至少不突破安全夹紧', fitAffine1D([0, 0.5, 1, 0.25, 0.75], [0, 3, 1, 9, 0.7]).a <= 1.8);
+}
+
+console.log('\n[2c] 校准帧鲁棒聚合');
+{
+  // 10 帧稳定注视 + 1 帧正在转头（姿态偏离 8°，特征也离群）
+  const stable = Array.from({ length: 10 }, (_, i) => ({
+    vec: [0.2 + i * 0.001, 0.1, 0.01, -0.01, 0.02, 0.03], yaw: 1.2, pitch: 0.5,
+  }));
+  const withDrift = [...stable, { vec: [0.9, 0.8, 0.3, 0.2, 0.1, 0.1], yaw: 9, pitch: 6 }];
+  const agg = robustAggregate(withDrift, { min: 6 });
+  ok('头动帧被剔除，聚合值不被带偏', close(agg[0], 0.2045, 0.008), `hx=${agg[0]}`);
+  ok('保留帧不足时返回 null', robustAggregate(stable.slice(0, 3), { min: 6 }) === null);
+  const mixed = [...stable, { vec: [0.2, 0.1, 0.01, -0.01, 0.02, 20], yaw: 1.2, pitch: 0.5 }];
+  ok('特征离群帧被剔除', Number.isFinite(robustAggregate(mixed, { min: 6 })[5]) && Math.abs(robustAggregate(mixed, { min: 6 })[5]) < 0.1);
 }
 
 console.log('\n[3] 一欧元滤波');
@@ -192,6 +220,33 @@ console.log('\n[12] 双路融合');
   ok('融合结果夹在屏幕内', edge.x <= 1440 && edge.x >= 0);
   ok('分歧度量', close(disagreement(pc, ph), 200, 1e-6));
   ok('单路无分歧', disagreement(pc, { valid: false }) === null);
+}
+
+{
+  const snap = {
+    metrics: { minutes: 52, blinkRate: 9, blinkDur: 92, perclos: 21, distance: 39, light: 48, focus: 44, fatigue: 68, health: 52, reliable: true },
+    session: { blinks: 412 },
+    alerts: [{ time: '14:02', title: '眨眼过少', detail: '8 次/分' }],
+  };
+  const a = { level: 'warn', score: 52, title: '出现了疲劳性闭眼', summary: '测试结论',
+    findings: [{ key: 'perclos', severity: 'bad', title: '疲劳性闭眼', detail: '闭眼占比过高', actions: ['远眺'] }],
+    actions: ['远眺 20 秒'], prediction: '趋势上升', alerts: [] };
+  const r = buildReport(snap, a);
+  ok('报告含 8 项指标', r.metrics.length === 8);
+  ok('每项指标都有解释和改善建议', r.metrics.every((m) => m.explain && m.tip && m.ref));
+  ok('眨眼偏低判为需留意', r.metrics.find((m) => m.key === 'blinkRate').status === 'warn');
+  ok('视距过近判为需改善', r.metrics.find((m) => m.key === 'distance').status === 'bad');
+  ok('疲劳指数超阈值判为需改善', r.metrics.find((m) => m.key === 'fatigue').status === 'bad');
+  ok('健康分与结论透传', r.verdict.score === 52 && r.verdict.title === '出现了疲劳性闭眼');
+  ok('上下文信息带入', r.duration === 52 && r.blinks === 412 && r.alerts.length === 1);
+  const md = reportToMarkdown(r);
+  ok('Markdown 带解释章节', md.includes('每个数字都带解释'));
+  ok('Markdown 含发现的问题与建议', md.includes('发现的问题') && md.includes('接下来怎么做'));
+  ok('Markdown 含免责声明', md.includes('不构成医疗诊断'));
+
+  const idle = buildReport({ metrics: { blinkRate: 0, distance: 0 }, session: {}, alerts: [] },
+    { level: 'idle', score: 0, title: '建立画像', summary: '采集中', findings: [], actions: [], prediction: '' });
+  ok('无数据时指标为采集中', idle.metrics.every((m) => m.status === 'idle' && m.value === '--'));
 }
 
 console.log(`\n结果：${pass} 通过 / ${fail} 失败\n`);

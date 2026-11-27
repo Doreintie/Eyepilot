@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" data-theme="dark" data-glass="on">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,6 +7,8 @@
 <meta name="description" content="用电脑摄像头实现眼动追踪：用眼睛代替鼠标，并由 AI 实时分析用眼健康。" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%230a0d14'/%3E%3Cellipse cx='32' cy='32' rx='21' ry='13' fill='none' stroke='%2322d3ee' stroke-width='3'/%3E%3Ccircle cx='32' cy='32' r='7' fill='%2322d3ee'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="./styles/main.css" />
+<link rel="stylesheet" href="./styles/glass.css" />
+<link rel="stylesheet" href="./styles/focus-v141.css" />
 </head>
 <body>
 <div class="app" id="app">
@@ -48,9 +50,9 @@
 
   <aside class="rail">
     <nav>
-      <button class="rail-btn active" data-view="console" data-gaze>
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>
-        <span>控制台</span>
+      <button class="rail-btn active" data-view="focus" data-gaze>
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4.5l3 1.8M9 2.5h6"/></svg>
+        <span>专注会话</span>
       </button>
       <button class="rail-btn" data-view="eyecare" data-gaze>
         <svg viewBox="0 0 24 24"><path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12Z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -64,23 +66,47 @@
         <svg viewBox="0 0 24 24"><path d="M12 3.2l1.7 4.4 4.4 1.7-4.4 1.7L12 15.4l-1.7-4.4L5.9 9.3l4.4-1.7L12 3.2Z"/><path d="M18.3 15.2l.9 2.2 2.2.9-2.2.9-.9 2.2-.9-2.2-2.2-.9 2.2-.9.9-2.2Z"/></svg>
         <span>AI 教练</span>
       </button>
-      <button class="rail-btn" data-view="plugins" data-gaze>
-        <svg viewBox="0 0 24 24"><path d="M10 4.2a2.2 2.2 0 0 1 4 0c0 1.1.9 1.8 2 1.8h2.4v3.2c0 1.1.7 2 1.8 2a2.2 2.2 0 0 1 0 4c-1.1 0-1.8.9-1.8 2V21h-3.2c-1.1 0-2 .7-2 1.8"/><path d="M10 4.2V7c0 1.1-.9 1.8-2 1.8H5.6v3.4c0 1.1-.7 2-1.8 2"/><path d="M3.8 15.2h1.9c1.1 0 2 .9 2 2v3.6h4.3"/></svg>
-        <span>插件</span>
+      <button class="rail-btn" data-view="console" data-gaze>
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>
+        <span>控制台</span>
       </button>
     </nav>
     <div class="rail-foot">
-      <button class="rail-btn" data-view="settings" data-gaze>
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
-        <span>设置</span>
-      </button>
+      <div class="rail-more" id="railMore">
+        <div class="rail-more-menu" id="railMoreMenu" hidden>
+          <button class="rail-btn" data-view="plugins" data-gaze>
+            <svg viewBox="0 0 24 24"><path d="M10 4.2a2.2 2.2 0 0 1 4 0c0 1.1.9 1.8 2 1.8h2.4v3.2c0 1.1.7 2 1.8 2a2.2 2.2 0 0 1 0 4c-1.1 0-1.8.9-1.8 2V21h-3.2c-1.1 0-2 .7-2 1.8"/><path d="M10 4.2V7c0 1.1-.9 1.8-2 1.8H5.6v3.4c0 1.1-.7 2-1.8 2"/><path d="M3.8 15.2h1.9c1.1 0 2 .9 2 2v3.6h4.3"/></svg>
+            <span>插件中心</span>
+          </button>
+          <button class="rail-btn" data-view="settings" data-gaze>
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+            <span>设置</span>
+          </button>
+        </div>
+        <button class="rail-btn rail-more-toggle" id="btnRailMore" data-gaze aria-expanded="false" aria-haspopup="true">
+          <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+          <span>更多</span>
+        </button>
+      </div>
     </div>
   </aside>
 
   <main class="views" id="views">
 
+    <!-- ============ 专注会话 ============ -->
+    <section class="view active" data-view="focus">
+      <div class="view-head">
+        <div>
+          <h1>专注会话</h1>
+          <p class="sub">25 分钟双场景专注计时；纸质看在座与生理信号，电脑看视线与凝视。</p>
+        </div>
+        <span class="pill tiny">真实眼控驱动</span>
+      </div>
+      <div class="focus-view" id="focusSessionRoot"></div>
+    </section>
+
     <!-- ============ 控制台 ============ -->
-    <section class="view active" data-view="console">
+    <section class="view" data-view="console">
       <div class="console-grid">
         <div class="stage-card card">
           <div class="card-head">
@@ -97,6 +123,13 @@
           <div class="stage" id="stage">
             <div class="stage-glow"></div>
             <div class="tile-grid" id="tileGrid">
+              <button class="tile" data-gaze data-nav="focus">
+                <span class="tile-ico">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4.5l3 1.8M9 2.5h6"/></svg>
+                </span>
+                <span class="tile-t">专注会话</span>
+                <span class="tile-s">25 分钟一轮 · 真实信号判定</span>
+              </button>
               <button class="tile" data-gaze data-nav="eyecare">
                 <span class="tile-ico">
                   <svg viewBox="0 0 24 24"><path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12Z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -117,13 +150,6 @@
                 </span>
                 <span class="tile-t">AI 教练</span>
                 <span class="tile-s">个性化用眼建议</span>
-              </button>
-              <button class="tile" data-gaze data-nav="plugins">
-                <span class="tile-ico">
-                  <svg viewBox="0 0 24 24"><path d="M10 4.2a2.2 2.2 0 0 1 4 0c0 1.1.9 1.8 2 1.8h2.4v3.2c0 1.1.7 2 1.8 2a2.2 2.2 0 0 1 0 4c-1.1 0-1.8.9-1.8 2V21h-3.2c-1.1 0-2 .7-2 1.8"/><path d="M10 4.2V7c0 1.1-.9 1.8-2 1.8H5.6v3.4c0 1.1-.7 2-1.8 2"/><path d="M3.8 15.2h1.9c1.1 0 2 .9 2 2v3.6h4.3"/></svg>
-                </span>
-                <span class="tile-t">插件中心</span>
-                <span class="tile-s">把眼控接进任何程序</span>
               </button>
             </div>
 
@@ -519,20 +545,23 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>控制方式</h3><span class="pill tiny" id="modePill">眼控</span></div>
-          <p class="body-text">眼控读虹膜，精细但要校准、对头位敏感；<b>头部模式只读头部转角</b>，极稳、免校准，代价是要用转头来移动光标。</p>
-          <div class="mode-switch">
-            <button class="mode-btn on" data-mode="eye" data-gaze>眼控</button>
-            <button class="mode-btn" data-mode="hybrid" data-gaze>混合</button>
-            <button class="mode-btn" data-mode="head" data-gaze>头部</button>
-            <button class="mode-btn" data-mode="mouse" data-gaze>鼠标</button>
+          <div class="card-head"><h3>输入方式</h3><span class="pill tiny" id="modePill">纯鼠标</span></div>
+          <p class="body-text"><b>鼠标永远可用</b>：只要鼠标一动，眼控立刻让位，停手后自动交还——不会再出现「两个指针互抢」的情况。</p>
+          <div class="mode-switch mode-switch-4">
+            <button class="mode-btn" data-mode="eye" data-gaze>纯眼控</button>
+            <button class="mode-btn" data-mode="hybrid" data-gaze>眼 + 鼠</button>
+            <button class="mode-btn" data-mode="head" data-gaze>眼 + 头</button>
+            <button class="mode-btn on" data-mode="mouse" data-gaze>纯鼠标</button>
           </div>
-          <p class="fine" id="modeHint">眼控读虹膜，最精细，需要校准。</p>
+          <p class="fine" id="modeHint">纯鼠标：眼控关闭，护眼与专注监测照常。</p>
           <div class="head-config" id="headConfig">
             <label class="range-row"><span>水平范围</span><input type="range" id="setHeadH" min="4" max="16" step="1" value="8" /><b id="headHHint">8°</b></label>
             <label class="range-row"><span>垂直范围</span><input type="range" id="setHeadV" min="3" max="12" step="1" value="5" /><b id="headVHint">5°</b></label>
             <label class="range-row"><span>死区</span><input type="range" id="setHeadDead" min="10" max="80" step="2" value="44" /><b id="headDeadHint">44px</b></label>
             <label class="range-row" id="hybridRow"><span>精修范围</span><input type="range" id="setHybrid" min="40" max="260" step="10" value="110" /><b id="hybridHint">110px</b></label>
+            <label class="switch-row">只用头部（不看虹膜，适合眼睛疲劳时）
+              <input type="checkbox" id="setHeadOnly" /><i class="switch"></i>
+            </label>
             <div class="row-between">
               <span class="fine">范围越小转头越省力；死区越大越稳；精修范围决定虹膜能“拉”动多少。</span>
               <button class="btn ghost sm" id="btnRecenter" data-gaze>重新归中</button>
@@ -543,26 +572,6 @@
           </label>
         </div>
 
-        <div class="card phone-card">
-          <div class="card-head"><h3>手机双摄</h3><span class="pill tiny" id="phonePill">未连接</span></div>
-          <p class="body-text">手机当<b>第二视角</b>：架在屏幕侧上方 30–45°，和电脑摄像头同时看脸。两路融合能压抖动、躲镜片反光。画面不出手机，只传 478 个关键点（约 3 KB/帧）。</p>
-          <div class="mode-switch">
-            <button class="mode-btn on" data-phone-mode="off" data-gaze>关闭</button>
-            <button class="mode-btn" data-phone-mode="fuse" data-gaze>融合</button>
-            <button class="mode-btn" data-phone-mode="only" data-gaze>仅手机</button>
-          </div>
-          <label class="range-row"><span>手机权重</span><input type="range" id="setPhoneWeight" min="10" max="90" step="5" value="55" /><b id="phoneWeightHint">55%</b></label>
-          <div class="phone-link-row">
-            <code id="phoneUrl">—</code>
-          </div>
-          <div class="phone-link-actions">
-            <button class="btn ghost sm" id="btnPhoneLan" data-gaze>开启局域网</button>
-            <button class="btn ghost sm" id="btnPhoneCopy" data-gaze>复制地址</button>
-            <button class="btn ghost sm" id="btnPhoneAlign" data-gaze>手机五点对齐</button>
-            <button class="btn link sm" id="btnPhoneReset">重置手机校正</button>
-          </div>
-          <p class="fine" id="phoneDetail">手机与电脑连同一个 Wi-Fi，用手机浏览器打开地址。</p>
-        </div>
 
         <div class="card">
           <div class="card-head"><h3>视线微调</h3><span class="pill tiny" id="offsetPill">偏移 0 , 0 px</span></div>
@@ -589,6 +598,27 @@
             <span class="fine">头部转动后，多点击几次就会重新收敛。</span>
             <button class="btn link sm" id="btnResetAuto">重置自校准</button>
           </div>
+        </div>
+
+        <div class="card phone-card">
+          <div class="card-head"><h3>手机双摄</h3><span class="pill tiny" id="phonePill">未连接</span></div>
+          <p class="body-text">手机当<b>第二视角</b>：架在屏幕侧上方 30–45°，和电脑摄像头同时看脸。两路融合能压抖动、躲镜片反光。画面不出手机，只传 478 个关键点（约 3 KB/帧）。</p>
+          <div class="mode-switch">
+            <button class="mode-btn on" data-phone-mode="off" data-gaze>关闭</button>
+            <button class="mode-btn" data-phone-mode="fuse" data-gaze>融合</button>
+            <button class="mode-btn" data-phone-mode="only" data-gaze>仅手机</button>
+          </div>
+          <label class="range-row"><span>手机权重</span><input type="range" id="setPhoneWeight" min="10" max="90" step="5" value="55" /><b id="phoneWeightHint">55%</b></label>
+          <div class="phone-link-row">
+            <code id="phoneUrl">—</code>
+          </div>
+          <div class="phone-link-actions">
+            <button class="btn ghost sm" id="btnPhoneLan" data-gaze>开启局域网</button>
+            <button class="btn ghost sm" id="btnPhoneCopy" data-gaze>复制地址</button>
+            <button class="btn ghost sm" id="btnPhoneAlign" data-gaze>手机五点对齐</button>
+            <button class="btn link sm" id="btnPhoneReset">重置手机校正</button>
+          </div>
+          <p class="fine" id="phoneDetail">手机与电脑连同一个 Wi-Fi，用手机浏览器打开地址。</p>
         </div>
 
         <div class="card island-card">
@@ -629,7 +659,7 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.4.0</span></div>
+          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.5.0</span></div>
           <p class="body-text">EyePilot · 瞳行，校园黑客松参赛作品。技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移特征 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件，普通笔记本摄像头即可运行。</p>
           <p class="fine">本作品不构成医疗建议。若持续眼干、眼痛或视力模糊，请就医。</p>
         </div>

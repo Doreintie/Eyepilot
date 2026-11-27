@@ -1,0 +1,219 @@
+/* ============================================================
+   focus-v141.css — 专注会话视图的 v1.4.1 原型视觉
+   ------------------------------------------------------------
+   只作用于 #focusSessionRoot 内部，不改主程序外壳、不动 JS。
+   数据钩子（data-*）沿用 focus-session.js，真实眼控逻辑不变。
+   ============================================================ */
+
+#focusSessionRoot {
+  --fv-ink: #EAF2F8;
+  --fv-ink-2: rgba(234, 242, 248, .72);
+  --fv-ink-3: rgba(234, 242, 248, .48);
+  --fv-line: rgba(255, 255, 255, .20);
+  --fv-line-soft: rgba(255, 255, 255, .11);
+  --fv-mint: #5FE3B8;
+  --fv-ice: #69CBEF;
+  --fv-warn: #F3C470;
+  --fv-bad: #F08C7C;
+  --fv-glass: linear-gradient(157deg, rgba(255,255,255,.175), rgba(255,255,255,.075) 48%, rgba(255,255,255,.105));
+  --fv-blur: blur(26px) saturate(160%) brightness(1.06);
+  --fv-shadow: 0 30px 76px -30px rgba(2,9,18,.82);
+}
+
+#focusSessionRoot .fv-wrap { display: flex; flex-direction: column; gap: 14px; }
+
+/* 顶栏：品牌 + 场景段 + 状态芯片 */
+#focusSessionRoot .fv-bar {
+  display: flex; align-items: center; gap: 14px; min-height: 42px; flex-wrap: wrap;
+}
+#focusSessionRoot .fv-brand { display: flex; align-items: center; gap: 9px; }
+#focusSessionRoot .fv-mark {
+  width: 26px; height: 26px; border-radius: 9px; display: grid; place-items: center;
+  background: linear-gradient(150deg, rgba(255,255,255,.38), rgba(255,255,255,.12));
+  border: 1px solid rgba(255,255,255,.38);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 6px 18px -6px rgba(95,227,184,.6);
+}
+#focusSessionRoot .fv-mark i {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--fv-mint);
+  box-shadow: 0 0 10px var(--fv-mint); display: block;
+  animation: fvBreathe 3.4s ease-in-out infinite;
+}
+@keyframes fvBreathe { 0%,100% { opacity:.55; transform:scale(.9); } 50% { opacity:1; transform:scale(1.12); } }
+#focusSessionRoot .fv-brand b { font-size: 14.5px; font-weight: 600; letter-spacing: .4px; color: var(--fv-ink); }
+#focusSessionRoot .fv-brand span { font-size: 12.5px; color: var(--fv-ink-3); padding-left: 2px; }
+#focusSessionRoot .fv-grow { flex: 1; }
+#focusSessionRoot .fv-seg {
+  display: flex; gap: 2px; padding: 3px; border-radius: 12px;
+  background: rgba(255,255,255,.085); border: 1px solid rgba(255,255,255,.13);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+}
+#focusSessionRoot .fv-seg button {
+  font-family: inherit; font-size: 12.5px; color: var(--fv-ink-3); background: transparent;
+  border: 0; border-radius: 9px; padding: 7px 15px; cursor: pointer; letter-spacing: .2px;
+  transition: background-color .22s ease, color .22s ease; min-height: 34px;
+}
+#focusSessionRoot .fv-seg button:hover { color: var(--fv-ink-2); }
+#focusSessionRoot .fv-seg button.on {
+  color: #08131f; font-weight: 600;
+  background: linear-gradient(150deg, rgba(255,255,255,.96), rgba(228,244,249,.84));
+  box-shadow: 0 4px 14px -6px rgba(0,0,0,.55);
+}
+#focusSessionRoot .fv-chip {
+  display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--fv-ink-2);
+  padding: 8px 12px; border-radius: 11px; white-space: nowrap;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.13);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+}
+#focusSessionRoot .fv-chip .fv-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--fv-mint); box-shadow: 0 0 8px var(--fv-mint);
+}
+
+/* 玻璃表面 */
+#focusSessionRoot .fv-glass {
+  position: relative; overflow: hidden;
+  background: var(--fv-glass);
+  -webkit-backdrop-filter: var(--fv-blur); backdrop-filter: var(--fv-blur);
+  border: 1px solid var(--fv-line); border-radius: 22px;
+  box-shadow: var(--fv-shadow), inset 0 1px 0 rgba(255,255,255,.30), inset 0 -1px 0 rgba(255,255,255,.06);
+}
+#focusSessionRoot .fv-glass::after {
+  content: ""; position: absolute; left: 20px; right: 20px; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.62), transparent);
+  pointer-events: none;
+}
+
+/* 主区：左舞台 + 右卡片列 */
+#focusSessionRoot .fv-main { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(300px, .7fr); gap: 14px; align-items: stretch; }
+
+/* 左：环形舞台 */
+#focusSessionRoot .fv-stage { display: flex; flex-direction: column; padding: 20px 26px 18px; }
+#focusSessionRoot .fv-stage::before {
+  content: ""; position: absolute; left: -6%; top: -26%; width: 60%; height: 92%;
+  background: radial-gradient(circle, rgba(112,224,232,.26), transparent 68%); filter: blur(8px); pointer-events: none;
+}
+#focusSessionRoot .fv-stage-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; position: relative; z-index: 1; }
+#focusSessionRoot .fv-eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: 2.6px; text-transform: uppercase; color: var(--fv-ink-3); font-weight: 700; }
+#focusSessionRoot .fv-stage-head h3 { font-size: 15px; font-weight: 500; margin-top: 6px; color: var(--fv-ink); letter-spacing: .2px; }
+#focusSessionRoot .fv-stage-head p { font-size: 11.5px; color: var(--fv-ink-3); margin-top: 3px; }
+
+#focusSessionRoot .fv-ringwrap { flex: 1; display: grid; place-items: center; position: relative; padding: 10px 0 6px; }
+#focusSessionRoot .fv-ring { position: relative; width: min(320px, 44vh, 100%); aspect-ratio: 1; }
+#focusSessionRoot .fv-ring::before {
+  content: ""; position: absolute; inset: -3%; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, transparent 60%, rgba(6,16,28,.36) 76%, rgba(6,16,28,.30) 91%, transparent 98%);
+}
+#focusSessionRoot .fv-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+#focusSessionRoot .fv-ring circle { fill: none; }
+#focusSessionRoot .fv-ring .fv-ticks { stroke: rgba(255,255,255,.28); stroke-width: 1.4; stroke-dasharray: 1 8.42; }
+#focusSessionRoot .fv-ring .bg { stroke: rgba(255,255,255,.14); stroke-width: 13; }
+#focusSessionRoot .fv-ring .fv-glow { stroke: rgba(95,227,184,.26); stroke-width: 30; stroke-linecap: round; }
+#focusSessionRoot .fv-ring .fg { stroke-width: 13; stroke-linecap: round; transition: stroke-dashoffset .5s linear, stroke .3s; }
+#focusSessionRoot .fv-ring-txt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+#focusSessionRoot .fv-ring-txt b {
+  font-size: clamp(44px, 5vw, 62px); font-weight: 200; letter-spacing: -2.5px; line-height: 1;
+  font-variant-numeric: tabular-nums; color: var(--fv-ink); text-shadow: 0 2px 34px rgba(130,230,240,.34);
+}
+#focusSessionRoot .fv-ring-txt span { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fv-ink-2); letter-spacing: .4px; }
+#focusSessionRoot .fv-ring-txt span::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--fv-mint);
+  box-shadow: 0 0 12px var(--fv-mint); animation: fvBreathe 3.4s ease-in-out infinite;
+}
+
+#focusSessionRoot .fv-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; position: relative; z-index: 1; }
+#focusSessionRoot .fv-btn {
+  font-family: inherit; font-size: 12.5px; color: var(--fv-ink); padding: 9px 16px; border-radius: 11px;
+  cursor: pointer; letter-spacing: .2px; transition: .24s ease; min-height: 36px;
+  background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.20);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+}
+#focusSessionRoot .fv-btn:hover { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.34); }
+#focusSessionRoot .fv-btn.line { background: transparent; color: var(--fv-ink-2); }
+#focusSessionRoot .fv-btn.primary {
+  color: #04110f; font-weight: 600;
+  background: linear-gradient(135deg, var(--fv-mint), var(--fv-ice));
+  border-color: rgba(255,255,255,.45);
+  box-shadow: 0 8px 26px -10px var(--fv-mint), inset 0 1px 0 rgba(255,255,255,.5);
+}
+#focusSessionRoot .fv-btn.primary:hover { filter: brightness(1.06); }
+#focusSessionRoot .fv-note { font-size: 11.5px; color: var(--fv-ink-3); text-align: center; line-height: 1.6; margin-top: 10px; position: relative; z-index: 1; }
+
+/* 右：卡片列 */
+#focusSessionRoot .fv-rail { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 12px; }
+#focusSessionRoot .fv-pad { padding: 14px 16px; }
+#focusSessionRoot .fv-card-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
+#focusSessionRoot .fv-card-h h3 { font-size: 10.5px; letter-spacing: 2.2px; text-transform: uppercase; color: var(--fv-ink-3); font-weight: 700; }
+#focusSessionRoot .fv-tag { font-size: 10px; color: var(--fv-ink-3); padding: 3px 8px; border-radius: 6px; letter-spacing: .4px; border: 1px solid rgba(255,255,255,.13); background: rgba(255,255,255,.055); }
+
+#focusSessionRoot .fv-score { display: flex; align-items: flex-end; gap: 8px; }
+#focusSessionRoot .fv-score > b { font-size: 38px; font-weight: 200; line-height: .86; letter-spacing: -2px; font-variant-numeric: tabular-nums; color: var(--fv-ink); }
+#focusSessionRoot .fv-score > span { font-size: 11.5px; color: var(--fv-ink-3); padding-bottom: 5px; }
+#focusSessionRoot .fv-level { margin-left: auto; text-align: right; padding-bottom: 2px; }
+#focusSessionRoot .fv-level em { font-style: normal; font-size: 12.5px; }
+#focusSessionRoot .fv-level p { font-size: 11px; color: var(--fv-ink-3); margin-top: 4px; }
+
+#focusSessionRoot .fv-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 12px; background: var(--fv-line-soft); border-radius: 13px; overflow: hidden; border: 1px solid var(--fv-line-soft); }
+#focusSessionRoot .fv-metrics > div { background: rgba(10,22,34,.30); padding: 8px 10px; }
+#focusSessionRoot .fv-metrics > div > span { display: block; font-size: 10px; color: var(--fv-ink-3); letter-spacing: .6px; margin-bottom: 4px; }
+#focusSessionRoot .fv-metrics b { font-size: 14.5px; font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--fv-ink); }
+#focusSessionRoot .fv-metrics b u { text-decoration: none; font-size: 10.5px; color: var(--fv-ink-3); margin-left: 3px; }
+
+#focusSessionRoot .fv-signals { display: flex; flex-direction: column; gap: 7px; }
+#focusSessionRoot .fv-sig { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 13px; background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.085); transition: .4s ease; }
+#focusSessionRoot .fv-sig-ico { width: 22px; height: 22px; border-radius: 8px; flex: 0 0 auto; display: grid; place-items: center; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); font-size: 11px; color: var(--fv-ink-2); }
+#focusSessionRoot .fv-sig-tx { flex: 1; min-width: 0; }
+#focusSessionRoot .fv-sig-tx b { display: block; font-size: 11.5px; font-weight: 500; letter-spacing: .2px; color: var(--fv-ink); }
+#focusSessionRoot .fv-sig-tx p { font-size: 9.5px; color: var(--fv-ink-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#focusSessionRoot .fv-sig-v { font-size: 11.5px; color: var(--fv-ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#focusSessionRoot .fv-sig.hot { border-color: rgba(243,196,112,.46); background: rgba(243,196,112,.12); }
+#focusSessionRoot .fv-sig.hot .fv-sig-v { color: var(--fv-warn); }
+#focusSessionRoot .fv-sig.cool { border-color: rgba(180,160,246,.46); background: rgba(180,160,246,.13); }
+#focusSessionRoot .fv-sig.cool .fv-sig-v { color: #B4A0F6; }
+
+#focusSessionRoot .fv-insight { display: flex; flex-direction: column; justify-content: center; }
+#focusSessionRoot .fv-insight p { font-size: 12px; line-height: 1.62; color: var(--fv-ink-2); }
+
+/* 时间轴 */
+#focusSessionRoot .fv-tl { padding: 13px 20px 14px; }
+#focusSessionRoot .fv-tl-h { display: flex; align-items: center; gap: 13px; margin-bottom: 9px; flex-wrap: wrap; }
+#focusSessionRoot .fv-tl-h h3 { font-size: 10.5px; letter-spacing: 2.2px; text-transform: uppercase; color: var(--fv-ink-3); font-weight: 700; }
+#focusSessionRoot .fv-tl-h .fv-tl-note { font-size: 11px; color: var(--fv-ink-3); }
+#focusSessionRoot .fv-legend { display: flex; gap: 13px; font-size: 10px; color: var(--fv-ink-3); margin-left: auto; }
+#focusSessionRoot .fv-legend i { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+#focusSessionRoot .fv-blocks { display: flex; gap: 3px; height: 26px; align-items: stretch; }
+#focusSessionRoot .fv-blocks i { flex: 1; border-radius: 3px; background: rgba(255,255,255,.085); transition: background .5s ease, box-shadow .5s ease; }
+#focusSessionRoot .fv-blocks i.deep { background: rgba(95,227,184,.85); box-shadow: 0 0 14px -3px rgba(95,227,184,.55); }
+#focusSessionRoot .fv-blocks i.ok { background: rgba(105,203,239,.80); }
+#focusSessionRoot .fv-blocks i.warn { background: rgba(243,196,112,.80); }
+#focusSessionRoot .fv-blocks i.bad { background: rgba(240,140,124,.80); }
+#focusSessionRoot .fv-blocks i.now { box-shadow: 0 0 0 1.5px rgba(255,255,255,.7) inset, 0 0 16px -2px rgba(255,255,255,.55); }
+#focusSessionRoot .fv-tl-foot { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: var(--fv-ink-3); letter-spacing: .4px; }
+
+#focusSessionRoot .fv-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+#focusSessionRoot .fv-foot span { font-size: 11px; color: var(--fv-ink-3); }
+
+#focusSessionRoot .fv-preview { display: none; width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; border: 1px solid var(--fv-line); background: rgba(8,18,30,.55); position: relative; z-index: 1; }
+#focusSessionRoot .fv-preview.on { display: block; }
+#focusSessionRoot .fv-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+
+/* 浅色主题：透镜感但保留深色字 */
+:root[data-theme="light"] #focusSessionRoot {
+  --fv-ink: #16202f;
+  --fv-ink-2: rgba(22,32,47,.72);
+  --fv-ink-3: rgba(22,32,47,.50);
+  --fv-line: rgba(255,255,255,.60);
+  --fv-line-soft: rgba(17,34,64,.12);
+  --fv-glass: linear-gradient(157deg, rgba(255,255,255,.82), rgba(255,255,255,.60) 48%, rgba(255,255,255,.72));
+}
+:root[data-theme="light"] #focusSessionRoot .fv-glass { border-color: rgba(255,255,255,.7); }
+:root[data-theme="light"] #focusSessionRoot .fv-metrics > div { background: rgba(255,255,255,.42); }
+:root[data-theme="light"] #focusSessionRoot .fv-sig { background: rgba(255,255,255,.42); border-color: rgba(17,34,64,.10); }
+:root[data-theme="light"] #focusSessionRoot .fv-seg button.on { color: #16202f; }
+:root[data-theme="light"] #focusSessionRoot .fv-btn { color: var(--fv-ink); }
+
+/* 窄屏 */
+@media (max-width: 1020px) {
+  #focusSessionRoot .fv-main { grid-template-columns: 1fr; }
+  #focusSessionRoot .fv-ring { width: min(300px, 62vw, 100%); }
+  #focusSessionRoot .fv-rail { grid-template-rows: auto auto auto; }
+  #focusSessionRoot .fv-legend { display: none; }
+}

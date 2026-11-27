@@ -4,7 +4,7 @@
 
 import {
   OneEuroFilter, buildFeatureVector, fitRidge, predictRidge,
-  medianVector, clamp, mean, lerp, FEATURE_VERSION, fitAffine1D,
+  medianVector, clamp, mean, lerp, FEATURE_VERSION, fitAffine1D, robustAggregate,
 } from './core/math.js';
 import { pxToDegrees } from './core/health.js';
 
@@ -27,6 +27,7 @@ export class GazeTracker {
     this.offset = { x: 0, y: 0 };
     this.beyondSince = 0;
     this.shown = null;
+    this.cutoff = null;   // 自适应一欧元截止频率，按每帧置信度缓慢调整
     // 使用中自校准：每次“注视点击”都提供了一个我们知道大致落点的样本，
     // 用它缓慢修正整体偏移，抵消头位变化带来的漂移。
     this.auto = { x: 0, y: 0, n: 0 };
@@ -36,7 +37,7 @@ export class GazeTracker {
        角度 → 目标位置，再以「限速 + 死区」的方式把光标挪过去，
        所以即使角度有噪声，光标也只是轻微改变速度，不会跳。 */
     this.controlMode = 'eye';
-    this.head = { hRange: 8, vRange: 5, dead: 44, maxSpeed: 1100, tau: 0.09, hybridRange: 110, hybridDead: 12, hybridTau: 0.18 };
+    this.head = { hRange: 8, vRange: 5, dead: 44, maxSpeed: 1100, tau: 0.09, hybridRange: 110, hybridDead: 12, hybridTau: 0.18, only: false };
     this.headZero = { yaw: 0, pitch: 0 };
     this.headPos = null;
     this.headMoving = false;
@@ -303,10 +304,11 @@ export class GazeTracker {
 
   observeAnchor(tx, ty) {
     const g = this.gaze;
-    if (!g || !g.valid || !Number.isFinite(tx) || !Number.isFinite(ty)) return false;
+    // 低置信度时视线位置本身不可信，拿它当锚点等于「用噪声校准模型」
+    if (!g || !g.valid || g.confidence < 0.55 || !Number.isFinite(tx) || !Number.isFinite(ty)) return false;
     const dx = tx - g.x;
     const dy = ty - g.y;
-    if (Math.hypot(dx, dy) > 260) return false;
+    if (Math.hypot(dx, dy) > 220) return false;
     const k = 0.28;
     this.auto.x = clamp(this.auto.x + dx * k, -170, 170);
     this.auto.y = clamp(this.auto.y + dy * k, -170, 170);
@@ -321,6 +323,7 @@ export class GazeTracker {
     const beta = lerp(0.012, 0.0015, this.smooth / 100);
     this.fx = new OneEuroFilter({ minCutoff, beta });
     this.fy = new OneEuroFilter({ minCutoff, beta });
+    this.cutoff = null;   // 让自适应截止频率从新参数重新起步
   }
 
   setOffset(x, y) {
@@ -343,6 +346,7 @@ export class GazeTracker {
     this.goodAt = 0;
     this.beyondSince = 0;
     this.shown = null;
+    this.cutoff = null;
     this.headPos = null;
     this.headMoving = false;
     this.headYaw = null;
@@ -378,8 +382,13 @@ export class GazeTracker {
       this.onGaze(this.gaze);
       return this.gaze;
     }
-    if (this.controlMode === 'head') return this.updateHead(frame, now);
-    if (this.controlMode === 'hybrid') return this.updateHybrid(frame, now);
+    // 头部 = 眼控 + 头控：头姿给基准位置，虹膜只做 ±R 残差精修。
+    // 老的「只看头」保留成开关（head.only），默认关。
+    if (this.controlMode === 'head') {
+      return this.head.only ? this.updateHead(frame, now) : this.updateHybrid(frame, now);
+    }
+    // 混合 = 眼控 + 鼠标：光标仍由虹膜算，鼠标由主流程的 override 叠上来，
+    // 所以这里不拦截，直接走下面的虹膜路径。
 
     if (!this.model) {
       this.gaze = { ...last, valid: false, confidence: 0, ts: now, reason: 'uncalibrated' };
@@ -430,21 +439,9 @@ export class GazeTracker {
 
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const dt = this.prevT ? (now - this.prevT) / 1000 : 1 / 30;
-    this.prevT = now;
 
-    // 超过 400ms 没有有效点，重置滤波器，避免恢复时拖尾
-    if (this.lastGood && now - this.goodAt > 400) {
-      this.fx.reset();
-      this.fy.reset();
-    }
-
-    const px = clamp(mx, 0, 1) * vw + this.offset.x + this.auto.x;
-    const py = clamp(my, 0, 1) * vh + this.offset.y + this.auto.y;
-    let fx = clamp(this.fx.filter(clamp(px, 0, vw), dt), 0, vw);
-    let fy = clamp(this.fy.filter(clamp(py, 0, vh), dt), 0, vh);
-
-    // 置信度：眼睛张得越小 / 特征越偏离校准分布，越低
+    // 置信度：眼睛张得越小 / 特征越偏离校准分布，越低。
+    // 提前到滤波之前计算，好让平滑强度随信号质量动态调整。
     let conf = 1;
     if (frame.open < 0.55) conf *= clamp((frame.open - 0.32) / 0.23, 0.15, 1);
     if (this.model.mu) {
@@ -458,16 +455,42 @@ export class GazeTracker {
     }
     conf *= 1 - clamp(Math.abs(frame.yaw) * 0.5, 0, 0.35);
 
+    const dt = this.prevT ? (now - this.prevT) / 1000 : 1 / 30;
+    this.prevT = now;
+
+    // 超过 400ms 没有有效点，重置滤波器，避免恢复时拖尾
+    if (this.lastGood && now - this.goodAt > 400) {
+      this.fx.reset();
+      this.fy.reset();
+      this.shown = null;
+    }
+
+    // 信号干净时放开截止频率（跟手），噪声大时压低（稳）。
+    // 用 EMA 过渡，避免参数逐帧跳变反而让滤波自身震荡。
+    const baseCutoff = lerp(2.2, 0.28, this.smooth / 100);
+    const wantCutoff = baseCutoff * lerp(0.55, 1.12, clamp(conf, 0, 1));
+    this.cutoff = this.cutoff == null ? wantCutoff : lerp(this.cutoff, wantCutoff, 0.08);
+    this.fx.minCutoff = this.cutoff;
+    this.fy.minCutoff = this.cutoff;
+
+    const px = clamp(mx, 0, 1) * vw + this.offset.x + this.auto.x;
+    const py = clamp(my, 0, 1) * vh + this.offset.y + this.auto.y;
+    let fx = clamp(this.fx.filter(clamp(px, 0, vw), dt), 0, vw);
+    let fy = clamp(this.fy.filter(clamp(py, 0, vh), dt), 0, vh);
+
     const valid = conf > 0.28 && !outside;
 
-    // 死区：静止注视时人眼本身就有微颤，2px 以内的位移直接不输出，
-    // 这样“抽搐”在视觉上消失，而真实移动超过 2px 依然即时响应。
+    // 死区：静止注视时人眼本身就有微颤，小幅位移不直接输出。
+    // 原来 shown 完全锁死，缓慢移动会「粘住再跳一下」；现在死区内让 shown
+    // 以 18%/帧缓慢跟进，微颤仍被吸收，但连续移动不再产生台阶。
     if (valid) {
       const dz = conf > 0.6 ? 2.2 : 4.2;
       if (!this.shown) this.shown = { x: fx, y: fy };
       const ddx = fx - this.shown.x;
       const ddy = fy - this.shown.y;
       if (ddx * ddx + ddy * ddy < dz * dz) {
+        this.shown.x += ddx * 0.18;
+        this.shown.y += ddy * 0.18;
         fx = this.shown.x;
         fy = this.shown.y;
       } else {
@@ -530,7 +553,12 @@ export class Calibrator {
     this.updateFaceStatus(frame);
     if (!this.collector) return;
     if (!frame || !frame.present || frame.open < 0.18) return;
-    this.collector.vecs.push(buildFeatureVector(frame, this.degree));
+    // 连头部姿态一起存：聚合时把正在转头的帧剔掉，避免把头动误当成眼动写进模型
+    this.collector.vecs.push({
+      vec: buildFeatureVector(frame, this.degree),
+      yaw: Number.isFinite(frame.yawDeg) ? frame.yawDeg : 0,
+      pitch: Number.isFinite(frame.pitchDeg) ? frame.pitchDeg : 0,
+    });
   }
 
   /** 校准前根据点数改写标题、说明与距离提示，避免 16 点仍显示“九点校准” */
@@ -622,6 +650,12 @@ export class Calibrator {
         });
       }
     }
+    // 固定「左上 → 右下」的顺序会让眼球形成扫描惯性：每个点都从上一个点的
+    // 方向进入，回归模型会把这个习惯当成眼位偏差。打乱顺序但保留空间覆盖。
+    for (let i = coords.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = coords[i]; coords[i] = coords[j]; coords[j] = t;
+    }
 
     const samples = [];
     for (let i = 0; i < coords.length; i++) {
@@ -701,9 +735,11 @@ export class Calibrator {
    * 只有 b 时能纠“整体偏”；加上 a 之后还能纠“上准下偏”这类增益误差。
    */
   async validate(model) {
+    // 7 个留出点比原来的 5 个多 40% 的斜率对，Theil–Sen 能多容忍一个坏点
     const candidates = [
       { x: 0.26, y: 0.28 }, { x: 0.74, y: 0.32 },
       { x: 0.32, y: 0.7 }, { x: 0.7, y: 0.74 }, { x: 0.5, y: 0.5 },
+      { x: 0.5, y: 0.26 }, { x: 0.5, y: 0.74 },
     ];
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -713,7 +749,8 @@ export class Calibrator {
       this.showTarget(pt);
       this.els.hint.textContent = '最后验证：继续盯住圆点';
       await sleep(420);
-      const vec = await this.collect(700);
+      // 验证窗口短，门槛放宽到 4 帧；头动帧仍会被鲁棒聚合剔掉
+      const vec = await this.collect(700, [], 4);
       if (!vec) continue;
       const p = predictRidge(model, vec);
       pairs.push({ px: p[0], py: p[1], tx: pt.x, ty: pt.y });
@@ -747,12 +784,17 @@ export class Calibrator {
     }
   }
 
-  collect(ms, bucket = []) {
+  /**
+   * 采集窗口结束后做鲁棒聚合：头动帧 + 特征离群帧都不参与建模。
+   * 16 点二阶模型自由度更高，要求更多稳定帧；验证点窗口短，门槛可放宽。
+   */
+  collect(ms, bucket = [], minFrames = null) {
     return new Promise((resolve) => {
       this.collector = { vecs: bucket };
       setTimeout(() => {
         this.collector = null;
-        resolve(bucket.length >= 4 ? medianVector(bucket) : null);
+        const need = minFrames == null ? (this.points >= 16 ? 8 : 6) : minFrames;
+        resolve(robustAggregate(bucket, { min: need }));
       }, ms);
     });
   }

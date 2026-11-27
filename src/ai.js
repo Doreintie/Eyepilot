@@ -213,7 +213,7 @@ ${head}`;
     return '所有视频帧都在浏览器本地由 MediaPipe 模型处理，不会上传到任何服务器。只有匿名化的数值指标会写进本地存储，用来计算你的个人基线和趋势，可以随时在设置里一键清除。';
   }
   if (/游戏|训练|插件/.test(q)) {
-    return '「眼控训练」是一个 60 秒的注视训练小游戏：目标出现后盯住它，进度环走满即命中，能同时练习眼球的快速定位和稳定注视。插件中心里还有眼控阅读和眼控番茄钟。';
+    return '「眼控训练」是一个 60 秒的注视训练小游戏：目标出现后盯住它，进度环走满即命中，能同时练习眼球的快速定位和稳定注视。插件中心里还有眼控阅读；左侧菜单第一项是专注会话。';
   }
   return `${head}
 ${assessment && assessment.summary ? assessment.summary : ''}
@@ -378,48 +378,143 @@ export function extractJson(text) {
 
 /* ---------------- 文字报告 ---------------- */
 
+/**
+ * 指标解释表：报告里每个数字都配一句「它是什么、为什么重要、怎么改善」。
+ * 纯数据，便于单测与复用；state 返回 good / warn / bad。
+ */
+const REPORT_METRICS = [
+  {
+    key: 'blinkRate', label: '眨眼频率', unit: '次/分', ref: '15–20 次/分',
+    explain: '眨眼把泪液均匀铺在眼球表面。盯着屏幕时人会不自觉少眨，泪膜蒸发过快，就会出现干、涩、异物感。',
+    tip: '有意识地完整眨眼；做 10 次「用力闭眼—睁开」。',
+    state: (v) => (v < 9 ? 'bad' : v < 13 ? 'warn' : 'good'),
+  },
+  {
+    key: 'blinkDur', label: '平均闭眼时长', unit: 'ms', ref: '100–150 ms',
+    explain: '一次完整眨眼约 0.1–0.15 秒。明显偏短多半是「半眨眼」，上眼睑没完全合上，泪膜铺不均匀。',
+    tip: '刻意把每次眨眼做完整，不要只用眼皮快速一碰。',
+    state: (v) => (v < 80 ? 'warn' : 'good'),
+  },
+  {
+    key: 'perclos', label: '闭眼占比 PERCLOS', unit: '%', ref: '< 15%',
+    explain: '一段时间里眼睛闭着的时间比例，是判断困倦的经典指标。正常阅读在 5% 以下，超过 20% 说明大脑在强制短暂「关机」。',
+    tip: '立刻远眺 20 秒，把接下来的任务切成 15 分钟一段。',
+    state: (v) => (v > 26 ? 'bad' : v > 18 ? 'warn' : 'good'),
+  },
+  {
+    key: 'distance', label: '估算视距', unit: 'cm', ref: '50–70 cm',
+    explain: '眼睛到屏幕的距离（单目几何估算，看相对变化即可）。太近会让睫状肌持续收缩，是视疲劳和近视加深的主要诱因。',
+    tip: '把屏幕推到一臂距离；屏幕上沿略低于视线，俯角 10–15°。',
+    state: (v) => (v < 40 ? 'bad' : v < 50 ? 'warn' : v > 80 ? 'warn' : 'good'),
+  },
+  {
+    key: 'light', label: '相对照度', unit: '', ref: '与屏幕亮度接近',
+    explain: '环境光强弱的相对值。屏幕和环境亮度差太大时，瞳孔要来回调节，眩光和眼干会明显增加。',
+    tip: '开一盏台灯或顶灯，避免只留屏幕一个光源；调整角度避开直射反光。',
+    state: (v) => (v < 50 ? 'warn' : 'good'),
+  },
+  {
+    key: 'focus', label: '专注度', unit: '/100', ref: '> 60 较好',
+    explain: '视线停留在任务区域的比例。下降通常意味着疲劳或任务难度不匹配，不一定是「不努力」。',
+    tip: '把任务拆成 10 分钟能完成的小目标，关掉通知。',
+    state: (v) => (v < 40 ? 'warn' : 'good'),
+  },
+  {
+    key: 'fatigue', label: '疲劳指数', unit: '/100', ref: '< 45 舒适', zeroValid: true,
+    explain: '综合眨眼、闭眼、视距和连续用眼时间算出的负荷值。越接近 100，越需要休息。',
+    tip: '到 65 就该休息 2 分钟；硬撑只会让恢复时间更长。',
+    state: (v) => (v >= 65 ? 'bad' : v >= 45 ? 'warn' : 'good'),
+  },
+  {
+    key: 'health', label: '健康分', unit: '/100', ref: '> 75 良好', zeroValid: true,
+    explain: '上面几项的综合得分，用来一眼判断整体用眼状态。',
+    tip: '连续用眼满 20 分钟就远眺一次，是最省力的维持方式。',
+    state: (v) => (v >= 75 ? 'good' : v >= 50 ? 'warn' : 'bad'),
+  },
+];
+
+const REPORT_STATE_TEXT = { good: '正常', warn: '需留意', bad: '需改善', idle: '采集中', info: '提示' };
+const REPORT_LEVEL_TEXT = { good: '状态良好', warn: '需要留意', bad: '建议休息', idle: '数据采集中' };
+
+/** 生成结构化报告模型（纯函数，可单测）。 */
 export function buildReport(snapshot, assessment) {
-  const m = snapshot.metrics || {};
-  const lines = [];
+  const m = (snapshot && snapshot.metrics) || {};
   const now = new Date();
-  lines.push(`# EyePilot 用眼报告`);
-  lines.push('');
-  lines.push(`生成时间：${now.toLocaleString('zh-CN')}`);
-  lines.push(`本次连续用眼：${Math.round(m.minutes || 0)} 分钟 · 累计眨眼 ${snapshot.session?.blinks || 0} 次`);
-  lines.push('');
-  lines.push('## 一句话结论');
-  lines.push(`**${assessment ? assessment.title : '—'}**`);
-  lines.push('');
-  lines.push(assessment ? assessment.summary : '');
-  lines.push('');
-  lines.push('## 关键指标');
-  lines.push('| 指标 | 数值 | 参考 |');
-  lines.push('| --- | --- | --- |');
-  lines.push(`| 眨眼频率 | ${m.blinkRate || '--'} 次/分 | 15–20 次/分 |`);
-  lines.push(`| 平均闭眼时长 | ${m.blinkDur || '--'} ms | 100–150 ms |`);
-  lines.push(`| PERCLOS | ${m.perclos || '--'}% | < 15% |`);
-  lines.push(`| 估算视距 | ${m.distance || '--'} cm | 50–70 cm |`);
-  lines.push(`| 相对照度 | ${m.light || '--'} | 与屏幕亮度接近 |`);
-  lines.push(`| 专注度 | ${m.focus || '--'}/100 | — |`);
-  lines.push(`| 疲劳指数 | ${m.fatigue || '--'}/100 | < 45 |`);
-  lines.push(`| 健康分 | ${m.health || '--'}/100 | > 75 |`);
-  lines.push('');
-  if (assessment && assessment.actions) {
-    lines.push('## 建议动作');
-    assessment.actions.forEach((a, i) => lines.push(`${i + 1}. ${a}`));
-    lines.push('');
-  }
-  lines.push('## 趋势预测');
-  lines.push((assessment && assessment.prediction) || '—');
-  lines.push('');
-  if (snapshot.alerts && snapshot.alerts.length) {
-    lines.push('## 本次提醒记录');
-    snapshot.alerts.slice(0, 10).forEach((a) => {
-      lines.push(`- ${a.time} ${a.title}：${a.detail}`);
+  const idle = !!(assessment && assessment.level === 'idle');
+  const metrics = REPORT_METRICS.map((def) => {
+    const raw = Number(m[def.key]);
+    const has = Number.isFinite(raw) && (raw > 0 || def.zeroValid);
+    const status = idle || !has ? 'idle' : def.state(raw);
+    return {
+      key: def.key, label: def.label,
+      value: has ? Math.round(raw * 10) / 10 : '--',
+      unit: def.unit, ref: def.ref, status,
+      statusText: REPORT_STATE_TEXT[status],
+      explain: def.explain, tip: def.tip,
+    };
+  });
+  return {
+    generatedAt: now.toLocaleString('zh-CN'),
+    duration: Math.round(m.minutes || 0),
+    blinks: (snapshot && snapshot.session && snapshot.session.blinks) || 0,
+    verdict: {
+      level: (assessment && assessment.level) || 'idle',
+      score: (assessment && typeof assessment.score === 'number') ? assessment.score : 0,
+      title: (assessment && assessment.title) || '正在建立你的用眼画像',
+      summary: (assessment && assessment.summary) || '让脸保持在摄像头画面中，约 1 分钟后即可生成评估。',
+    },
+    metrics,
+    findings: (assessment && assessment.findings) || [],
+    actions: (assessment && assessment.actions) || [],
+    prediction: (assessment && assessment.prediction) || '',
+    alerts: ((snapshot && snapshot.alerts) || []).slice(0, 10),
+  };
+}
+
+/** 把报告模型渲染成可下载 / 可复制的 Markdown（带解释）。 */
+export function reportToMarkdown(r) {
+  const L = [];
+  L.push('# EyePilot 用眼报告');
+  L.push('');
+  L.push(`生成时间：${r.generatedAt}`);
+  L.push(`本次连续用眼 ${r.duration} 分钟 · 累计眨眼 ${r.blinks} 次`);
+  L.push('');
+  L.push('## 一句话结论');
+  L.push(`**${r.verdict.title}**（健康分 ${r.verdict.score}/100 · ${REPORT_LEVEL_TEXT[r.verdict.level] || ''}）`);
+  L.push('');
+  L.push(r.verdict.summary);
+  L.push('');
+  L.push('## 关键指标 · 每个数字都带解释');
+  r.metrics.forEach((x) => {
+    L.push(`### ${x.label}：${x.value}${x.unit} — ${x.statusText}`);
+    L.push(`参考：${x.ref}`);
+    L.push(x.explain);
+    L.push(`改善：${x.tip}`);
+    L.push('');
+  });
+  if (r.findings.length) {
+    L.push('## 发现的问题');
+    r.findings.forEach((f, i) => {
+      L.push(`${i + 1}. **${f.title}**（${REPORT_STATE_TEXT[f.severity] || '提示'}）`);
+      L.push(`   ${f.detail}`);
+      (f.actions || []).forEach((a) => L.push(`   - ${a}`));
     });
+    L.push('');
   }
-  lines.push('');
-  lines.push('---');
-  lines.push('说明：本报告基于普通摄像头的光学估算，不构成医疗诊断。如持续眼干、眼痛或视力模糊，请及时就医。');
-  return lines.join('\n');
+  if (r.actions.length) {
+    L.push('## 接下来怎么做');
+    r.actions.forEach((a, i) => L.push(`${i + 1}. ${a}`));
+    L.push('');
+  }
+  L.push('## 趋势预测');
+  L.push(r.prediction || '—');
+  L.push('');
+  if (r.alerts.length) {
+    L.push('## 本次提醒记录');
+    r.alerts.forEach((a) => L.push(`- ${a.time} ${a.title}：${a.detail}`));
+    L.push('');
+  }
+  L.push('---');
+  L.push('说明：本报告基于普通摄像头的光学估算，不构成医疗诊断。如持续眼干、眼痛或视力模糊，请及时就医。');
+  return L.join('\n');
 }

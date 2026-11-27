@@ -23,7 +23,7 @@ function copy(src, dest) {
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 
-for (const item of ['index.html', 'island.html', 'phone.html', 'src', 'styles', 'vendor']) {
+for (const item of ['index.html', 'island.html', 'phone.html', 'src', 'styles', 'vendor', 'assets']) {
   copy(path.join(root, item), path.join(webOut, item));
 }
 

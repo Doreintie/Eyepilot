@@ -17,10 +17,12 @@ export const DEFAULT_SETTINGS = {
   autoY: 0,
   autoN: 0,
   // 控制方式：eye = 虹膜眼控（精细，需校准）；head = 头部转角（稳、免校准）
-  controlMode: 'eye',
+  // v1.5.0 起定位是「自律 / 护眼」，新装默认纯鼠标，眼控按需开启
+  controlMode: 'mouse',
   headH: 8,
   headV: 5,
   headDead: 44,
+  headOnly: false,
   hybridRange: 110,
   hybridDead: 12,
   systemCursor: false,

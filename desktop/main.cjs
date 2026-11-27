@@ -501,6 +501,9 @@ function toggleIsland() {
 let nut = null;
 let cursorBusy = false;
 let cursorPending = null;
+let lastSet = null;
+let lastSetAt = 0;
+let userMoveSentAt = 0;
 
 function ensureNut() {
   if (nut !== undefined && nut !== null) return nut;
@@ -538,8 +541,27 @@ ipcMain.on('cursor:move', (_e, nx, ny) => {
   const x = Math.round((d.workArea.x + Math.max(0, Math.min(1, Number(nx))) * d.workArea.width) * s);
   const y = Math.round((d.workArea.y + Math.max(0, Math.min(1, Number(ny))) * d.workArea.height) * s);
   cursorPending = { x, y };
+  lastSet = { x, y };
+  lastSetAt = Date.now();
   pumpCursor();
 });
+
+/**
+ * 检测「人手动了鼠标」：眼控每帧都在写光标，物理鼠标会立刻被覆盖，
+ * 用户会觉得鼠标失灵。这里比对「上次设的位置」和「当前位置」，
+ * 偏差超过阈值就通知渲染进程让眼控让位。
+ */
+setInterval(async () => {
+  if (!nut || !lastSet) return;
+  if (Date.now() - lastSetAt < 60) return;
+  try {
+    const p = await nut.mouse.getPosition();
+    if (Math.hypot(p.x - lastSet.x, p.y - lastSet.y) > 16 && Date.now() - userMoveSentAt > 400) {
+      userMoveSentAt = Date.now();
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cursor:usermoved');
+    }
+  } catch { /* 读位置失败不影响主流程 */ }
+}, 120);
 
 /* ---------------- 托盘 ---------------- */
 
@@ -603,6 +625,8 @@ async function boot() {
 
   port = await startServer();
   createWindow();
+  // 手机互联默认就开：少一步操作，用户不用先找按钮
+  startLan().catch((err) => console.warn('[手机] 局域网启动失败：', err && err.message));
   createTray();
   createIsland();
 }

@@ -132,22 +132,101 @@ export function predictRidge(model, x) {
  * 一维仿射最小二乘：y ≈ a·x + b。
  * 校准的留出点用它修正残余的「整体偏移 (b)」与「增益误差 (a)」，
  * 例如“越往下越偏下”就是 a 偏离 1。
- * 结果夹紧，避免个别坏点把曲线拉飞。
+ *
+ * v2：n ≥ 5 时改用 Theil–Sen 初始估计 + Huber IRLS 精修。
+ * 原来的一阶最小二乘对离群点毫无抵抗力——5 个留出点里只要 1 个点
+ * 因眨眼/误视采集失败，增益就会被拉到 clamp 边界，屏幕上产生数百像素
+ * 的系统性偏差。Theil–Sen 取所有点对斜率的中位数，可容忍约 30% 坏点；
+ * Huber 权重再把坏点压到近乎零，同时保留好点的全部信息。
  */
 export function fitAffine1D(xs, ys, { aMin = 0.55, aMax = 1.8, bLimit = 0.35 } = {}) {
   const n = Math.min(xs.length, ys.length);
   if (n < 3) return { a: 1, b: 0, n: Math.max(0, n) };
-  let sx = 0, sy = 0, sxx = 0, sxy = 0;
-  for (let i = 0; i < n; i++) {
-    sx += xs[i]; sy += ys[i]; sxx += xs[i] * xs[i]; sxy += xs[i] * ys[i];
+
+  let a, b;
+  if (n >= 5) {
+    // ① Theil–Sen：所有点对的斜率取中位数，坏点对只占少数
+    const slopes = [];
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = xs[j] - xs[i];
+        if (Math.abs(dx) > 1e-9) slopes.push((ys[j] - ys[i]) / dx);
+      }
+    }
+    a = slopes.length ? median(slopes) : 1;
+    b = median(xs.map((x, i) => ys[i] - a * x));
+
+    // ② Huber IRLS：以稳健初值起步，残差大的点自动降权
+    const resid = xs.map((x, i) => ys[i] - (a * x + b));
+    const scale = 1.4826 * medianAbsDev(resid);
+    if (scale > 1e-6) {
+      for (let iter = 0; iter < 3; iter++) {
+        let sw = 0, swx = 0, swy = 0, swxx = 0, swxy = 0;
+        for (let i = 0; i < n; i++) {
+          const w = Math.min(1, (1.345 * scale) / Math.max(Math.abs(resid[i]), 1e-9));
+          sw += w; swx += w * xs[i]; swy += w * ys[i];
+          swxx += w * xs[i] * xs[i]; swxy += w * xs[i] * ys[i];
+        }
+        const den = sw * swxx - swx * swx;
+        if (Math.abs(den) < 1e-12) break;
+        const na = (sw * swxy - swx * swy) / den;
+        const nb = (swy - na * swx) / sw;
+        if (!Number.isFinite(na) || !Number.isFinite(nb)) break;
+        for (let i = 0; i < n; i++) resid[i] = ys[i] - (na * xs[i] + nb);
+        a = na; b = nb;
+      }
+    }
+  } else {
+    // 点数太少（3–4 个）时点对不足，退回普通最小二乘
+    let sx = 0, sy = 0, sxx = 0, sxy = 0;
+    for (let i = 0; i < n; i++) {
+      sx += xs[i]; sy += ys[i]; sxx += xs[i] * xs[i]; sxy += xs[i] * ys[i];
+    }
+    const den = n * sxx - sx * sx;
+    a = Math.abs(den) < 1e-9 ? 1 : (n * sxy - sx * sy) / den;
+    b = (sy - a * sx) / n;
   }
-  const den = n * sxx - sx * sx;
-  let a = Math.abs(den) < 1e-9 ? 1 : (n * sxy - sx * sy) / den;
-  let b = (sy - a * sx) / n;
   if (!Number.isFinite(a) || !Number.isFinite(b)) { a = 1; b = 0; }
   a = clamp(a, aMin, aMax);
   b = clamp(b, -bLimit, bLimit);
   return { a, b, n };
+}
+
+/**
+ * 校准帧的鲁棒聚合：先按头部姿态漂移剔除帧，再逐维用 MAD 剔除特征离群帧，
+ * 最后取保留帧的逐维中位数。
+ *
+ * 校准时用户难免微动头部。原来 collect() 把窗口内所有帧一视同仁地取中位数，
+ * 一个正在转头的 400ms 片段会把特征整体带偏。现在头动超过阈值的帧直接不参与，
+ * 从源头提高每个校准点的特征质量。
+ *
+ * @param {{vec:number[], yaw?:number, pitch?:number}[]} samples
+ * @returns {number[]|null} 聚合后的特征向量；保留帧不足时返回 null（触发重采）
+ */
+export function robustAggregate(samples, { min = 6, maxYawDrift = 2.5, maxPitchDrift = 2.5 } = {}) {
+  if (!Array.isArray(samples) || samples.length < min) return null;
+  const yaws = samples.map((s) => (Number.isFinite(s.yaw) ? s.yaw : 0));
+  const pitches = samples.map((s) => (Number.isFinite(s.pitch) ? s.pitch : 0));
+  const my = median(yaws), mp = median(pitches);
+  const sy = medianAbsDev(yaws), sp = medianAbsDev(pitches);
+  const kept = samples.filter((s, i) =>
+    Math.abs(yaws[i] - my) <= Math.max(maxYawDrift, 3 * sy) &&
+    Math.abs(pitches[i] - mp) <= Math.max(maxPitchDrift, 3 * sp),
+  );
+  if (kept.length < min) return null;
+
+  const vecs = kept.map((s) => s.vec).filter((v) => Array.isArray(v) && v.length);
+  if (vecs.length < min) return null;
+  const d = vecs[0].length;
+  if (!vecs.every((v) => v.length === d)) return null;
+
+  const mids = medianVector(vecs);
+  const devs = [];
+  for (let j = 0; j < d; j++) devs.push(medianAbsDev(vecs.map((v) => v[j])));
+  const clean = vecs.filter((v) => v.every((val, j) =>
+    Math.abs(val - mids[j]) <= Math.max(1e-3, 4 * devs[j]),
+  ));
+  return medianVector(clean.length >= min ? clean : vecs);
 }
 
 export const serializeModel = (m) => ({

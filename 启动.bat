@@ -7,7 +7,7 @@ title EyePilot - AI 眼控与用眼健康助手
 if exist "runtime\python.exe" (
   echo.
   echo   正在启动 EyePilot ...
-  "runtime\python.exe" serve.py
+  "runtime\python.exe" serve.py --lan
   if errorlevel 1 pause
   exit /b
 )
@@ -16,7 +16,7 @@ where python >nul 2>nul
 if not errorlevel 1 (
   echo.
   echo   正在启动 EyePilot ...
-  python serve.py
+  python serve.py --lan
   if errorlevel 1 pause
   exit /b
 )

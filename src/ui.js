@@ -7,6 +7,7 @@ import { app, saveSettings } from './store.js';
 import { pluginHost } from './plugins.js';
 import { lineChart, drawHeatmap } from './charts.js';
 import { clamp } from './core/math.js';
+import { reportToMarkdown } from './ai.js';
 
 const E = {};
 let actions = {};
@@ -38,7 +39,7 @@ const ids = [
   'autoPill', 'btnResetAuto',
   'modePill', 'headConfig', 'setHeadH', 'setHeadV', 'setHeadDead', 'setHybrid',
   'headHHint', 'headVHint', 'headDeadHint', 'hybridHint', 'hybridRow', 'modeHint',
-  'btnRecenter', 'setSystemCursor',
+  'btnRecenter', 'setSystemCursor', 'setHeadOnly',
   'phonePill', 'phoneUrl', 'phoneDetail', 'phoneWeightHint', 'setPhoneWeight',
   'btnPhoneLan', 'btnPhoneCopy', 'btnPhoneAlign', 'btnPhoneReset',
   'setIsland', 'isBlink', 'isSession', 'isFatigue', 'isHealth', 'isBreak',
@@ -49,6 +50,7 @@ const ids = [
   'calResultTitle', 'calResultText', 'calResultMetrics', 'calIntro', 'calCountdown',
   'calBrand', 'calEyebrow', 'calIntroText',
   'calPreview', 'calFace', 'calClose', 'btnCalFinish', 'btnCalRetry',
+  'railMore', 'railMoreMenu', 'btnRailMore',
   'careIndex', 'careName', 'careDesc', 'careArc', 'careCount', 'careList',
   'btnCarePrev', 'btnCarePlay', 'btnCareNext',
   'breakOverlay', 'breakCount', 'breakTrackBar', 'btnBreakDone', 'btnBreakSkip', 'breakFine',
@@ -73,7 +75,8 @@ export const ui = {
     decorateTiles();
     applySettingsToForm();
     updateStorageInfo();
-    switchView('console');
+    // v1.5.0：定位是自律 / 护眼，默认落在专注会话，而不是眼控控制台
+    switchView('focus');
     setOnboard('idle');
     return ui;
   },
@@ -99,6 +102,7 @@ function bindNav() {
   $$('.rail-btn[data-view]').forEach((btn) => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
   });
+  bindMoreMenu();
   document.body.addEventListener('click', (ev) => {
     const nav = ev.target.closest('[data-nav]');
     if (nav) { switchView(nav.dataset.nav); return; }
@@ -111,9 +115,43 @@ function bindNav() {
   });
 }
 
+function bindMoreMenu() {
+  const btn = E.btnRailMore;
+  const menu = E.railMoreMenu;
+  if (!btn || !menu) return;
+  btn.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    setMoreMenu(menu.hidden);
+  });
+  // 点击菜单项后收起
+  menu.querySelectorAll('.rail-btn[data-view]').forEach((item) => {
+    item.addEventListener('click', () => setMoreMenu(false));
+  });
+  // 点击外部关闭
+  document.addEventListener('click', (ev) => {
+    if (!menu.hidden && E.railMore && !E.railMore.contains(ev.target)) setMoreMenu(false);
+  });
+  // Esc 关闭
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && !menu.hidden) setMoreMenu(false);
+  });
+}
+
+function setMoreMenu(open) {
+  const menu = E.railMoreMenu;
+  const btn = E.btnRailMore;
+  if (!menu || !btn) return;
+  menu.hidden = !open;
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.classList.toggle('open', open);
+}
+
 export function switchView(name) {
   $$('.rail-btn[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === name));
+  if (E.btnRailMore) {
+    E.btnRailMore.classList.toggle('active', name === 'plugins' || name === 'settings');
+  }
   const host = $('#views');
   if (host) host.scrollTop = 0;
   if (name === 'health') setTimeout(() => actions.renderCharts && actions.renderCharts(), 60);
@@ -252,19 +290,20 @@ export function updateModeUI() {
   const mode = ['eye', 'hybrid', 'head', 'mouse'].includes(app.settings.controlMode)
     ? app.settings.controlMode : 'eye';
   $$('.mode-btn').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
-  const label = { eye: '眼控', hybrid: '混合', head: '头部', mouse: '鼠标' }[mode];
+  const label = { eye: '纯眼控', hybrid: '眼 + 鼠', head: '眼 + 头', mouse: '纯鼠标' }[mode];
   if (E.modePill) E.modePill.textContent = label;
   const hint = {
-    eye: '眼控读虹膜，最精细，需要校准；头动后可五点对齐或自校准。',
-    hybrid: '头部负责粗定位，虹膜只在精修范围内微调：不抖，也不用大幅转头。',
-    head: '只读头部转角，免校准、静止不抖；用转头移动光标。',
-    mouse: '暂停眼控与注视点击，护眼监测继续；用鼠标正常操作。',
+    eye: '纯眼控：虹膜决定光标。鼠标一动仍会临时接管，停手 1.2 秒后交还。',
+    hybrid: '眼 + 鼠：眼睛和鼠标同时有效，鼠标一动就接管，停 0.3 秒交还眼睛。',
+    head: '眼 + 头：头姿定大方向，虹膜在精修范围内微调；不用大幅转头，也不用重新校准。',
+    mouse: '纯鼠标：眼控与注视点击关闭，护眼与专注监测照常。',
   }[mode];
   if (E.modeHint) E.modeHint.textContent = hint;
 
-  const needHead = mode === 'head' || mode === 'hybrid';
+  const needHead = mode === 'head';
   if (E.headConfig) E.headConfig.classList.toggle('on', needHead);
-  if (E.hybridRow) E.hybridRow.style.display = mode === 'hybrid' ? '' : 'none';
+  if (E.hybridRow) E.hybridRow.style.display = mode === 'head' ? '' : 'none';
+  if (E.setHeadOnly) E.setHeadOnly.checked = !!app.settings.headOnly;
   if (E.headHHint) E.headHHint.textContent = `${app.settings.headH || 8}°`;
   if (E.headVHint) E.headVHint.textContent = `${app.settings.headV || 5}°`;
   if (E.headDeadHint) E.headDeadHint.textContent = `${app.settings.headDead || 44}px`;
@@ -632,6 +671,11 @@ function bindCare() {
 
 /* ---------------- 手机双摄 ---------------- */
 
+/** 鼠标接管期间：把眼控光标与注视环压暗，给一个「现在轮到鼠标」的信号 */
+export function setMouseHold(on) {
+  document.documentElement.classList.toggle('mouse-hold', !!on);
+}
+
 export function updatePhoneUI(stats) {
   const mode = app.settings.phoneMode || 'off';
   $$('.mode-btn[data-phone-mode]').forEach((b) => b.classList.toggle('on', b.dataset.phoneMode === mode));
@@ -648,7 +692,7 @@ export function updatePhoneUI(stats) {
   if (E.phoneDetail) {
     E.phoneDetail.textContent = on
       ? `${stats.phone || '手机'} · ${stats.fps} fps · 延迟 ${stats.latency} ms · 丢帧 ${stats.dropped}`
-      : '手机与电脑连同一个 Wi-Fi，用手机浏览器打开地址。';
+      : '① 手机连同一个 Wi-Fi　② 浏览器打开上面的地址　③ 点「开始推流」';
   }
 
   const info = app.phoneInfo;
@@ -882,6 +926,7 @@ function applySettingsToForm() {
   if (E.setHeadDead) E.setHeadDead.value = String(s.headDead || 44);
   if (E.setHybrid) E.setHybrid.value = String(s.hybridRange || 110);
   if (E.setSystemCursor) E.setSystemCursor.checked = !!s.systemCursor;
+  if (E.setHeadOnly) E.setHeadOnly.checked = !!s.headOnly;
   const isl = s.island || {};
   const items = isl.items || {};
   if (E.setIsland) E.setIsland.checked = isl.enabled !== false;
@@ -1031,6 +1076,12 @@ function bindSettings() {
       }
     });
   }
+  if (E.setHeadOnly) {
+    E.setHeadOnly.addEventListener('change', () => {
+      patch({ headOnly: E.setHeadOnly.checked });
+      actions.setHeadOnly && actions.setHeadOnly(E.setHeadOnly.checked);
+    });
+  }
   if (E.btnRecenter) {
     E.btnRecenter.addEventListener('click', () => actions.recenterHead && actions.recenterHead(false));
   }
@@ -1109,28 +1160,109 @@ function bindExports() {
   E.btnCoachReport.addEventListener('click', () => actions.report && actions.report());
 }
 
-export function showReport(markdown) {
+export function showReport(model) {
   pluginHost.close();
   const root = $('#modalRoot');
   root.innerHTML = '';
   root.classList.add('open');
+
+  // 兼容旧调用：若传入 Markdown 字符串，仍按纯文本展示
+  if (typeof model === 'string') {
+    showPlainReport(root, model);
+    return;
+  }
+
+  const r = model;
+  const markdown = reportToMarkdown(r);
+  const v = r.verdict;
+  const levelText = { good: '状态良好', warn: '需要留意', bad: '建议休息', idle: '数据采集中' }[v.level] || '评估中';
+
   const backdrop = el('div', { class: 'modal-backdrop' });
-  const modal = el('div', { class: 'modal', style: 'width:min(760px,94vw)' });
+  const modal = el('div', { class: 'modal rp-modal', style: 'width:min(820px,94vw)' });
+  const scoreColor = v.level === 'good' ? 'var(--good)' : v.level === 'warn' ? 'var(--warn)' : v.level === 'bad' ? 'var(--bad)' : 'var(--dim)';
+  const CIRC = 2 * Math.PI * 52;
+
+  const metricsHtml = r.metrics.map((m) => `
+    <div class="rp-metric rp-${m.status}">
+      <div class="rp-m-top"><span class="rp-m-label">${m.label}</span><span class="rp-m-status">${m.statusText}</span></div>
+      <div class="rp-m-val">${m.value}<small>${m.unit}</small></div>
+      <div class="rp-m-ref">参考 ${m.ref}</div>
+      <p class="rp-m-explain">${escapeHtml(m.explain)}</p>
+      <p class="rp-m-tip"><b>怎么做</b> ${escapeHtml(m.tip)}</p>
+    </div>`).join('');
+
+  const findingsHtml = r.findings.length
+    ? r.findings.map((f) => `
+        <div class="rp-finding rp-${f.severity || 'info'}">
+          <div class="rp-f-title"><i></i>${escapeHtml(f.title)}<span>${REPORT_SEV[f.severity] || '提示'}</span></div>
+          <p>${escapeHtml(f.detail)}</p>
+          ${(f.actions || []).length ? `<ul>${f.actions.map((a) => `<li>${escapeHtml(a)}</li>`).join('')}</ul>` : ''}
+        </div>`).join('')
+    : '<div class="rp-finding rp-good"><div class="rp-f-title"><i></i>没有发现明显问题<span>正常</span></div><p>各项指标都在舒适区，保持现在用眼节奏就好。</p></div>';
+
+  const actionsHtml = r.actions.length
+    ? r.actions.map((a, i) => `<li><b>${i + 1}</b><span>${escapeHtml(a)}</span></li>`).join('')
+    : '';
+
+  const alertsHtml = r.alerts.length
+    ? r.alerts.map((a) => `<li><time>${escapeHtml(a.time || '')}</time><b>${escapeHtml(a.title || '')}</b><span>${escapeHtml(a.detail || '')}</span></li>`).join('')
+    : '';
+
   modal.innerHTML = `
-    <div class="modal-head">
-      <h3>用眼报告</h3>
-      <span class="pill tiny">本地生成</span>
+    <div class="modal-head rp-head">
+      <div class="rp-head-title"><h3>用眼报告</h3><span class="pill tiny">本地生成 · 不上传</span></div>
       <button class="modal-close" data-gaze aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
-    <div class="modal-body">
-      <pre class="code" style="white-space:pre-wrap;font-size:12px;line-height:1.8">${escapeHtml(markdown)}</pre>
-      <div class="row-between" style="margin-top:12px">
-        <span class="fine">报告只包含匿名指标，可自由分享。</span>
-        <span>
-          <button class="btn ghost sm" data-copy>复制</button>
-          <button class="btn primary sm" data-dl data-gaze>下载 Markdown</button>
-        </span>
+    <div class="modal-body rp-body">
+      <div class="rp-hero rp-hero-${v.level}">
+        <div class="rp-hero-score">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="rp-track" cx="60" cy="60" r="52" />
+            <circle class="rp-arc" cx="60" cy="60" r="52" style="stroke:${scoreColor};stroke-dasharray:${CIRC};stroke-dashoffset:${CIRC * (1 - Math.max(0, Math.min(100, v.score)) / 100)}" />
+          </svg>
+          <div class="rp-score-txt"><b style="color:${scoreColor}">${v.score}</b><span>健康分</span></div>
+        </div>
+        <div class="rp-hero-copy">
+          <span class="rp-level rp-level-${v.level}">${levelText}</span>
+          <h2>${escapeHtml(v.title)}</h2>
+          <p>${escapeHtml(v.summary)}</p>
+          <div class="rp-hero-meta"><span>连续用眼 <b>${r.duration}</b> 分钟</span><span>累计眨眼 <b>${r.blinks}</b> 次</span><span>${escapeHtml(r.generatedAt)}</span></div>
+        </div>
       </div>
+
+      <section class="rp-section">
+        <div class="rp-sec-head"><h4>关键指标</h4><span>每个数字都附了「它是什么、为什么重要、怎么做」</span></div>
+        <div class="rp-metrics">${metricsHtml}</div>
+      </section>
+
+      <section class="rp-section">
+        <div class="rp-sec-head"><h4>发现了什么</h4><span>按严重程度排序</span></div>
+        <div class="rp-findings">${findingsHtml}</div>
+      </section>
+
+      ${actionsHtml ? `<section class="rp-section">
+        <div class="rp-sec-head"><h4>接下来怎么做</h4><span>照着做，不用记指标</span></div>
+        <ol class="rp-actions">${actionsHtml}</ol>
+      </section>` : ''}
+
+      <section class="rp-section rp-prediction">
+        <div class="rp-p-ico"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 3 8-9M15 6h5v5"/></svg></div>
+        <div><h4>趋势预测</h4><p>${escapeHtml(r.prediction || '数据不足，暂时无法预测。')}</p></div>
+      </section>
+
+      ${alertsHtml ? `<section class="rp-section">
+        <div class="rp-sec-head"><h4>本次提醒记录</h4><span>最近 ${r.alerts.length} 条</span></div>
+        <ul class="rp-alerts">${alertsHtml}</ul>
+      </section>` : ''}
+
+      <p class="rp-disclaimer">本报告基于普通摄像头的光学估算，用于观察用眼习惯的相对变化，<b>不构成医疗诊断</b>。如持续眼干、眼痛或视力模糊，请及时就医。</p>
+    </div>
+    <div class="rp-foot">
+      <span class="fine">报告只包含匿名指标，可自由分享。</span>
+      <span>
+        <button class="btn ghost sm" data-copy data-gaze>复制文字版</button>
+        <button class="btn primary sm" data-dl data-gaze>下载 Markdown</button>
+      </span>
     </div>`;
   root.appendChild(backdrop);
   root.appendChild(modal);
@@ -1144,8 +1276,43 @@ export function showReport(markdown) {
   modal.querySelector('[data-copy]').addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(markdown);
-      toast('已复制到剪贴板', '', 'good', 2000);
+      toast('已复制到剪贴板', '文字版报告已复制', 'good', 2000);
     } catch { toast('复制失败', '浏览器拒绝了剪贴板权限', 'warn', 3000); }
+  });
+  modal.querySelector('[data-dl]').addEventListener('click', () => {
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    download(`EyePilot-用眼报告-${stamp}.md`, markdown, 'text/markdown;charset=utf-8');
+  });
+}
+
+const REPORT_SEV = { bad: '需改善', warn: '需留意', info: '提示', good: '正常' };
+
+function showPlainReport(root, markdown) {
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const modal = el('div', { class: 'modal', style: 'width:min(760px,94vw)' });
+  modal.innerHTML = `
+    <div class="modal-head">
+      <h3>用眼报告</h3><span class="pill tiny">本地生成</span>
+      <button class="modal-close" data-gaze aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <pre class="code" style="white-space:pre-wrap;font-size:12px;line-height:1.8">${escapeHtml(markdown)}</pre>
+      <div class="row-between" style="margin-top:12px">
+        <span class="fine">报告只包含匿名指标，可自由分享。</span>
+        <span>
+          <button class="btn ghost sm" data-copy data-gaze>复制</button>
+          <button class="btn primary sm" data-dl data-gaze>下载 Markdown</button>
+        </span>
+      </div>
+    </div>`;
+  root.appendChild(backdrop);
+  root.appendChild(modal);
+  const close = () => { root.classList.remove('open'); root.innerHTML = ''; };
+  modal.querySelector('.modal-close').addEventListener('click', close);
+  backdrop.addEventListener('click', close);
+  modal.querySelector('[data-copy]').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(markdown); toast('已复制到剪贴板', '', 'good', 2000); }
+    catch { toast('复制失败', '浏览器拒绝了剪贴板权限', 'warn', 3000); }
   });
   modal.querySelector('[data-dl]').addEventListener('click', () => {
     const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
@@ -1185,6 +1352,7 @@ Object.assign(ui, {
   updateAutoUI,
   updateModeUI,
   updatePhoneUI,
+  setMouseHold,
   startAlign,
   toast,
   appendChat,

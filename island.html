@@ -51,7 +51,10 @@
   .blink b { font-size: 15px; font-weight: 650; line-height: 1; font-variant-numeric: tabular-nums; }
   .blink span { font-size: 9px; color: var(--dim); }
 
-  .modes { display: flex; gap: 3px; margin-left: auto; -webkit-app-region: no-drag; }
+  /* 专注胶囊出现时把「次/分」单位收起来，给模式按钮腾位置 */
+  .bar:has(.focus-chip.show) .blink span { font-size: 9px; }
+  .bar:has(.focus-chip.show) .blink b { font-size: 14px; }
+  .modes { display: flex; gap: 2px; margin-left: auto; -webkit-app-region: no-drag; }
   .mode {
     width: 26px; height: 22px; border-radius: 6px; cursor: pointer;
     font-family: inherit; font-size: 10px; line-height: 1;
@@ -59,6 +62,13 @@
     transition: all .18s;
   }
   .mode:hover { color: var(--text); background: rgba(255, 255, 255, .07); }
+  .focus-chip {
+    display: none; align-items: center; padding: 2px 6px; border-radius: 5px;
+    font-family: var(--mono); font-size: 10.5px; color: var(--accent);
+    background: rgba(46, 230, 214, .1); border: 1px solid rgba(46, 230, 214, .28);
+  }
+  .focus-chip.show { display: inline-flex; }
+  .focus-chip b { font-weight: 500; }
   .mode.on {
     color: #06110f; background: var(--accent); border-color: var(--accent); font-weight: 700;
   }
@@ -131,10 +141,12 @@
     <div class="bar">
       <i class="dot idle" id="dot"></i>
       <div class="blink"><b id="blink">--</b><span>次/分</span></div>
+      <div class="focus-chip" id="focusChip" title="专注会话剩余时间"><b>--:--</b></div>
       <div class="modes">
-        <button class="mode" data-mode="eye" title="眼控：读虹膜，需校准">眼</button>
-        <button class="mode" data-mode="hybrid" title="混合：头粗定位 + 眼精修">混</button>
-        <button class="mode" data-mode="mouse" title="仅鼠标：暂停眼控，保留护眼记录">鼠</button>
+        <button class="mode" data-mode="eye" title="纯眼控：虹膜决定光标，鼠标随时可接管">眼</button>
+        <button class="mode" data-mode="hybrid" title="眼 + 鼠：眼睛和鼠标同时有效">混</button>
+        <button class="mode" data-mode="head" title="眼 + 头：头定方向，虹膜精修">头</button>
+        <button class="mode" data-mode="mouse" title="纯鼠标：眼控关闭，护眼与专注照常">鼠</button>
       </div>
       <button class="chev" id="chev" title="展开">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
@@ -149,6 +161,7 @@
         <div class="cell"><span>疲劳指数</span><b id="cFatigue">--</b></div>
         <div class="cell"><span>健康分</span><b id="cHealth">--</b></div>
         <div class="cell"><span>专注度</span><b id="cFocus">--</b></div>
+        <div class="cell wide"><span>专注会话</span><b id="cFocusSession">未开始</b></div>
         <div class="cell wide"><span>下次远眺</span><b id="cBreak">--</b></div>
       </div>
 
@@ -180,6 +193,8 @@
 
   const pad = (n) => String(n).padStart(2, '0');
   const clock = (s) => `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}`;
+  // 专注会话是 25 分钟一轮，用 mm:ss 比 h:mm 直观
+  const mmss = (s) => `${pad(Math.floor(s / 60))}:${pad(Math.floor(s % 60))}`;
 
   if (preview) {
     document.body.classList.add('preview');
@@ -246,6 +261,17 @@
     $('cFatigue').textContent = p.fatigue || '--';
     $('cHealth').textContent = p.health || '--';
     $('cFocus').textContent = p.focus || '--';
+    const fs = p.focusSession;
+    $('focusChip').classList.toggle('show', !!(fs && fs.running));
+    // 挤的时候「次/分」缩成一个「眨」字，避免和专注时间混读
+    const bu = document.querySelector('.blink span');
+    if (bu) bu.textContent = (fs && fs.running) ? '眨' : '次/分';
+    if (fs && fs.running) $('focusChip').querySelector('b').textContent = mmss(fs.remain);
+    $('cFocusSession').textContent = !fs
+      ? '--'
+      : (!fs.running && !fs.finished && fs.remain >= fs.total)
+        ? '未开始'
+        : `${mmss(fs.remain)} · ${fs.score} 分 · ${fs.label}${fs.finished ? '（已完成）' : ''}`;
     $('cBreak').textContent = !p.live
       ? '未启动'
       : (p.nextBreak == null ? '--'

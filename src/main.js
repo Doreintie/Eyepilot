@@ -22,9 +22,10 @@ import { DemoEngine, seedDemoData } from './demo.js';
 
 import './plugins/reader.js';
 import './plugins/game.js';
-import './plugins/focus.js';
+import { initFocusSession } from './focus-session.js';
 
 initStore();
+const focusSession = initFocusSession();
 
 const video = document.getElementById('cam');
 const overlay = document.getElementById('camOverlay');
@@ -33,6 +34,10 @@ let vision = null;
 let phoneLink = null;
 let tracker = null;
 let input = null;
+
+// 启动早期（input 还没创建）也可能走到这里，统一兜一层
+const pauseInput = () => { if (input) input.pause(); };
+const resumeInput = () => { if (input) input.resume(); };
 let health = null;
 let coach = null;
 let calibrator = null;
@@ -43,8 +48,14 @@ let lastBaselineAt = 0;
 
 /* ---------------- 手机双摄 ---------------- */
 
+let phoneAutoSwitched = false;
 function handlePhoneFrame(frame) {
   app.phoneFrame = frame;
+  if (!phoneAutoSwitched && app.model && (app.settings.controlMode || 'eye') === 'mouse') {
+    phoneAutoSwitched = true;
+    actions.setControlMode('hybrid');
+    ui.toast('手机已接入', '输入方式已临时切到「眼 + 鼠」，鼠标仍然随时可用', 'good', 5200);
+  }
   if (app.settings.phoneMode === 'off' || !app.model) {
     app.phoneGaze = null;
   } else {
@@ -92,12 +103,49 @@ function afterFrame(frame, gaze) {
   app.gaze = shown;
   // 校准器需要每一帧原始几何特征；之前漏了这一行，导致“样本太少”
   if (calibrator && calibrator.active) calibrator.pushFrame(frame);
-  input.update(shown, frame);
-  pushSystemCursor(shown);
+  tickMouseHold();
+  if (!mouseHoldActive) {
+    input.update(shown, frame);
+    pushSystemCursor(shown);
+  }
   health.ingest(frame, shown);
   pluginHost.frame(frame, shown);
+  focusSession.frame(frame, shown);
   renderLive(frame, shown, frame.fps);
   checkPoseDrift(frame);
+}
+
+/* ---------------- 鼠标优先（override） ---------------- */
+
+/**
+ * 眼控光标是每帧写入的，物理鼠标会和它抢同一个指针——v1.4.0 里就会出现
+ * 「眼控落点和鼠标指针重叠、鼠标推不动」的死锁。
+ * 这里把鼠标定为**永远可用**：一旦检测到人真的动了鼠标，眼控立刻让位一段时间。
+ * 各模式让位时长不同：混合模式里鼠标是平级输入，所以很快交还。
+ */
+const MOUSE_HOLD_MS = { eye: 1200, head: 900, hybrid: 300, mouse: 0 };
+let mouseHoldUntil = 0;
+let mouseHoldActive = false;
+
+function noteUserMouseMove() {
+  if (app.mode === 'demo') return;
+  const mode = app.settings.controlMode || 'eye';
+  const hold = MOUSE_HOLD_MS[mode] || 0;
+  if (!hold) return;
+  mouseHoldUntil = performance.now() + hold;
+  if (!mouseHoldActive) {
+    mouseHoldActive = true;
+    pauseInput();
+    ui.setMouseHold(true);
+  }
+}
+
+function tickMouseHold() {
+  if (!mouseHoldActive) return;
+  if (performance.now() < mouseHoldUntil) return;
+  mouseHoldActive = false;
+  if ((app.settings.controlMode || 'eye') !== 'mouse') resumeInput();
+  ui.setMouseHold(false);
 }
 
 /* ---------------- 系统光标 ---------------- */
@@ -109,6 +157,7 @@ function pushSystemCursor(gaze) {
   const d = window.eyePilotDesktop;
   if (!d || !d.cursor || !app.settings.systemCursor) return;
   if (app.settings.controlMode === 'mouse') return;
+  if (mouseHoldActive) return;
   if (!gaze || !gaze.valid) return;
   const now = performance.now();
   if (now - lastCursorAt < 30) return;
@@ -126,7 +175,7 @@ let lastPoseWarnAt = 0;
  * 偏差超过阈值就提示去做五点精细对齐（10 秒），比重做完整校准快得多。
  */
 function checkPoseDrift(frame) {
-  if (app.settings.controlMode === 'head' || app.settings.controlMode === 'hybrid') return;
+  if (app.settings.controlMode === 'head' || app.settings.controlMode === 'mouse') return;
   const p = app.model && app.model.pose;
   if (!p || !frame || !frame.present) return;
   const now = performance.now();
@@ -221,7 +270,7 @@ async function startCamera() {
     setOnboard(headMode || app.model ? 'ready' : 'camera');
     const devices = await vision.listCameras();
     setCameraOptions(devices);
-    input.resume();
+    resumeInput();
     if (app.model) {
       tracker.setModel(app.model);
       if (app.model.smooth != null) {
@@ -247,7 +296,7 @@ function stopCamera() {
   setStatus('cam', '', '相机未启动');
   setPrimaryButton('启动相机');
   setOnboard(app.model ? 'ready' : 'idle');
-  input.pause();
+  pauseInput();
 }
 
 /* ---------------- 校准 ---------------- */
@@ -264,7 +313,7 @@ function calibrate(fine = false) {
   }
   if (calibrator.active) return;
   setOnboard('ready');
-  input.pause();
+  pauseInput();
   const preview = document.getElementById('calPreview');
   if (preview) {
     preview.srcObject = video.srcObject;
@@ -296,7 +345,7 @@ function onCalibrationDone(model) {
   ui.updateAutoUI();
   app.settings.smooth = model.smooth != null ? model.smooth : app.settings.smooth;
   tracker.setSmooth(app.settings.smooth);
-  input.resume();
+  resumeInput();
   setOnboard('ready');
   setPrimaryButton('重新校准');
   setStatus('cal', 'on', `已校准 · ${model.rmse || '?'}px`);
@@ -310,7 +359,7 @@ function onCalibrationDone(model) {
 
 function onCalibrationCancel() {
   releaseCalPreview();
-  input.resume();
+  resumeInput();
   setOnboard(app.model ? 'ready' : vision.running ? 'camera' : 'idle');
 }
 
@@ -318,6 +367,8 @@ function onCalibrationCancel() {
 
 function startDemo() {
   if (vision.running) vision.stop();
+  // 纯鼠标模式默认停了注视点击；演示是用鼠标模拟视线，得重新打开
+  resumeInput();
   if (calibrator.active) calibrator.cancel(true);
   app.mode = 'demo';
   setDemoActive(true);
@@ -329,7 +380,7 @@ function startDemo() {
   ui.applyMirror();
   const seeded = seedDemoData(health);
   demo.start();
-  input.resume();
+  resumeInput();
   app.sessionStart = Date.now() - 14 * 60000;
   renderAlerts(health.alerts);
   renderMetrics(health.metrics);
@@ -343,6 +394,7 @@ function startDemo() {
 
 function stopDemo() {
   demo.stop();
+  if ((app.settings.controlMode || 'eye') === 'mouse') pauseInput();
   app.mode = 'idle';
   app.sessionStart = 0;
   setDemoActive(false);
@@ -352,7 +404,7 @@ function stopDemo() {
   setOnboard(app.model ? 'ready' : 'idle');
   setPrimaryButton('启动相机');
   ui.applyMirror();
-  input.pause();
+  pauseInput();
   const ctx = overlay.getContext('2d');
   ctx.clearRect(0, 0, overlay.width, overlay.height);
   notifyAlert({ level: 'info', title: '已退出演示模式', detail: '可以启动摄像头开始真实的眼动追踪。' });
@@ -387,10 +439,10 @@ function onAlert(a) {
 
 function onBreakEvent(ev) {
   if (ev.type === 'start') {
-    input.pause();
+    pauseInput();
     openBreak(ev.source === 'auto');
   } else {
-    input.resume();
+    resumeInput();
     closeBreak(ev);
     renderAlerts(health.alerts);
   }
@@ -419,9 +471,10 @@ const actions = {
       dead: app.settings.headDead || 44,
       hybridRange: app.settings.hybridRange || 110,
       hybridDead: app.settings.hybridDead == null ? 12 : app.settings.hybridDead,
+      only: !!app.settings.headOnly,
     });
-    if ((app.settings.controlMode || 'eye') === 'mouse') input.pause();
-    else input.resume();
+    if ((app.settings.controlMode || 'eye') === 'mouse') pauseInput();
+    else resumeInput();
     input.setSettings(app.settings);
     if (vision) vision.showMesh = app.settings.mesh;
     ui.els.dwellHint.textContent = (app.settings.dwellMs / 1000).toFixed(1);
@@ -517,6 +570,16 @@ const actions = {
     refreshPhoneUi();
     return r;
   },
+  setHeadOnly: (on) => {
+    saveSettings({ headOnly: !!on });
+    tracker.setHeadConfig({ only: !!on });
+    tracker.reset();
+    notifyAlert({
+      level: 'info',
+      title: on ? '头部模式只看头' : '头部模式恢复眼 + 头',
+      detail: on ? '不再读虹膜，免校准也不受镜片反光影响，代价是精度只到「大按钮」级。' : '头姿定方向、虹膜做精修，精度更高。',
+    });
+  },
   setPhoneMode: (mode) => {
     const m = ['off', 'fuse', 'only'].includes(mode) ? mode : 'off';
     saveSettings({ phoneMode: m });
@@ -553,15 +616,20 @@ const actions = {
     const m = ['eye', 'hybrid', 'head', 'mouse'].includes(mode) ? mode : 'eye';
     saveSettings({ controlMode: m });
     tracker.setControlMode(m);
-    if (m === 'mouse') input.pause();
-    else input.resume();
-    if (m === 'head' || m === 'hybrid') actions.recenterHead(true);
+    // 鼠标永远可用：只有「纯鼠标」才彻底停掉眼控；
+    // 其余模式靠 override 让位，不再和鼠标互斥。
+    mouseHoldActive = false;
+    mouseHoldUntil = 0;
+    ui.setMouseHold(false);
+    if (m === 'mouse') pauseInput();
+    else resumeInput();
+    if (m === 'head') actions.recenterHead(true);
     ui.updateModeUI();
     const info = {
-      eye: ['已切换到眼控模式', '读虹膜，最精细；需要校准，头动后可用五点对齐或自校准。'],
-      hybrid: ['已切换到混合模式', '头部负责粗定位、虹膜只做 ±R 精修：既不像纯眼控那样抖，也不用大幅转头。'],
-      head: ['已切换到头部模式', '只读头部转角，免校准、静止不抖；用转头移动光标。'],
-      mouse: ['已切换到仅鼠标', '暂停了眼控与点击，护眼监测继续。用鼠标正常操作即可。'],
+      eye: ['已切换到纯眼控', '虹膜决定光标。鼠标随时可以抢回控制权，停手 1.2 秒后自动交还。'],
+      hybrid: ['已切换到眼控 + 鼠标', '眼睛和鼠标同时有效：鼠标一动就接管，停 0.3 秒交还眼睛。'],
+      head: ['已切换到眼控 + 头控', '头姿决定大方向，虹膜在 ±110px 内精修；不用大幅转头，也不用重新校准。'],
+      mouse: ['已切换到纯鼠标', '眼控与注视点击暂停，护眼与专注监测继续。'],
     }[m];
     notifyAlert({ level: 'info', title: info[0], detail: info[1] });
   },
@@ -573,7 +641,8 @@ const actions = {
     }
     saveSettings({ headZeroYaw: f.yawDeg, headZeroPitch: f.pitchDeg });
     tracker.setHeadZero(f.yawDeg, f.pitchDeg);
-    tracker.setControlMode('head');
+    // 只改零点，不改模式：混合/眼控模式下调零点不应该把模式切走
+    tracker.setControlMode(app.settings.controlMode || 'eye');
     if (!silent) {
       notifyAlert({
         level: 'good',
@@ -675,6 +744,7 @@ function islandPayload() {
     focus: Math.round(m.focus || 0),
     session: sec,
     nextBreak: Math.round(left / 1000),
+    focusSession: focusSession.snapshot(),
     alert: a ? { level: a.level, title: a.title, detail: a.detail, ts: a.ts || Date.now() } : null,
     ts: Date.now(),
   };
@@ -713,8 +783,8 @@ function bindDesktop() {
     else if (name === 'report') { showView('coach'); actions.report(); }
     else if (name === 'toggle-pause') {
       pausedByTray = !pausedByTray;
-      if (pausedByTray) input.pause();
-      else input.resume();
+      if (pausedByTray) pauseInput();
+      else resumeInput();
       notifyAlert({
         level: 'info',
         title: pausedByTray ? '眼控已暂停' : '眼控已恢复',
@@ -738,9 +808,20 @@ function boot() {
     dead: app.settings.headDead || 44,
     hybridRange: app.settings.hybridRange || 110,
     hybridDead: app.settings.hybridDead == null ? 12 : app.settings.hybridDead,
+    only: !!app.settings.headOnly,
   });
-  if ((app.settings.controlMode || 'eye') === 'mouse') input.pause();
+  if ((app.settings.controlMode || 'eye') === 'mouse') pauseInput();
   tracker.setHeadZero(app.settings.headZeroYaw || 0, app.settings.headZeroPitch || 0);
+  // 鼠标永远可用：本页光标靠 pointermove，接管系统鼠标时靠主进程比对指针位置
+  window.addEventListener('pointermove', (e) => {
+    if (app.settings.systemCursor) return;
+    if (e.isTrusted) noteUserMouseMove();
+  }, { passive: true });
+  if (window.eyePilotDesktop && window.eyePilotDesktop.onUserMouse) {
+    window.eyePilotDesktop.onUserMouse(() => noteUserMouseMove());
+  }
+  // 没有摄像头时 afterFrame 不会跑，让位必须有自己的时钟，否则会一直卡在「暂停」
+  setInterval(tickMouseHold, 120);
   input = createGazeInput(app.settings, () => {});
   health = new HealthMonitor({ onMetrics, onAlert, onBreak: onBreakEvent });
   coach = new AICoach({ onAssessment: (a) => renderAssessment(a) });
@@ -759,7 +840,10 @@ function boot() {
   });
   renderPluginGrid(document.getElementById('pluginGrid'));
   ui.updatePhoneUI(null);
-  loadLinkInfo();
+  loadLinkInfo().then(() => {
+    // 局域网已经开着就直接订阅，手机一连上就有数据，不用再点一次
+    if (app.phoneInfo && app.phoneInfo.lan) actions.startPhoneLink();
+  });
 
   // 每次“注视点击”都提供一个已知落点，用它缓慢修正整体偏移（头挪动后的漂移主要靠这个）
   window.addEventListener('eyepilot:click', (ev) => {

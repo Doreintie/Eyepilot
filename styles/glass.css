@@ -1,0 +1,148 @@
+/* ============================================================
+   EyePilot · 瞳行  —  glass skin (v1.4.1)
+   叠在 main.css 之后，只覆盖设计变量与大型表面；
+   组件布局与 JS 一行不动。删除 index.html 里这行 <link> 即回滚。
+   ============================================================ */
+
+:root {
+  --glass-bg: linear-gradient(157deg, rgba(255,255,255,.175), rgba(255,255,255,.075) 48%, rgba(255,255,255,.105));
+  --glass-line: rgba(255,255,255,.20);
+  --glass-line-soft: rgba(255,255,255,.11);
+  --glass-blur: blur(26px) saturate(160%) brightness(1.06);
+  --glass-shadow: 0 30px 76px -30px rgba(2,9,18,.82);
+  --mint: #5FE3B8;
+  --ice: #69CBEF;
+}
+
+/* ---------- 暗色玻璃 ---------- */
+:root[data-theme="dark"] {
+  --bg: #0b1724;
+  --bg-grad:
+    radial-gradient(58% 44% at 16% 4%, rgba(126,222,238,.20), transparent 64%),
+    radial-gradient(46% 38% at 92% 96%, rgba(150,132,232,.12), transparent 72%),
+    linear-gradient(100deg, rgba(6,15,26,.62) 0%, rgba(6,15,26,.30) 32%, rgba(6,15,26,.02) 60%, rgba(6,15,26,.10) 100%),
+    url("../assets/bg-iceland.png") center 42% / cover no-repeat fixed;
+  --panel: rgba(11, 23, 36, .46);
+  --panel-2: rgba(255, 255, 255, .075);
+  --panel-3: rgba(255, 255, 255, .11);
+  --line: var(--glass-line);
+  --line-2: rgba(255, 255, 255, .30);
+  --text: #EAF2F8;
+  --muted: rgba(234, 242, 248, .82);
+  --dim: rgba(234, 242, 248, .62);
+  --accent: var(--mint);
+  --accent-soft: rgba(95, 227, 184, .16);
+  --accent-2: var(--ice);
+  --accent-2-soft: rgba(105, 203, 239, .16);
+  --good: var(--mint);
+  --warn: #F3C470;
+  --bad: #F08C7C;
+  --shadow: var(--glass-shadow);
+  --grid-line: rgba(255, 255, 255, .07);
+  --code-bg: rgba(6, 14, 24, .5);
+}
+
+/* 冰岛瀑布底图需要深色文字承载：浅色主题也做成透镜感，但保留深色字 */
+:root[data-theme="light"] {
+  --bg-grad:
+    radial-gradient(58% 44% at 16% 4%, rgba(255,255,255,.55), transparent 64%),
+    linear-gradient(100deg, rgba(238,244,252,.86) 0%, rgba(238,244,252,.70) 46%, rgba(238,244,252,.62) 100%),
+    url("../assets/bg-iceland.png") center 42% / cover no-repeat fixed;
+  --panel: rgba(255, 255, 255, .62);
+  --panel-2: rgba(255, 255, 255, .50);
+  --panel-3: rgba(255, 255, 255, .72);
+  --line: rgba(255, 255, 255, .60);
+  --line-2: rgba(17, 34, 64, .20);
+  --shadow: 0 24px 60px -30px rgba(24, 45, 84, .42);
+}
+
+/* ---------- 大型表面：玻璃 ---------- */
+html[data-glass="on"] .topbar,
+html[data-glass="on"] .rail {
+  background: rgba(9, 20, 32, .42);
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+  backdrop-filter: blur(26px) saturate(160%);
+}
+html[data-glass="on"][data-theme="light"] .topbar,
+html[data-glass="on"][data-theme="light"] .rail {
+  background: rgba(255, 255, 255, .48);
+}
+
+html[data-glass="on"] .card,
+html[data-glass="on"] .stat-box,
+html[data-glass="on"] .modal,
+html[data-glass="on"] .fs-card {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-line);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,.30), inset 0 -1px 0 rgba(255,255,255,.06);
+}
+
+/* 顶部高光丝 */
+html[data-glass="on"] .card::after,
+html[data-glass="on"] .fs-card::after {
+  content: ""; position: absolute; left: 20px; right: 20px; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.62), transparent);
+  pointer-events: none;
+}
+
+html[data-glass="on"][data-theme="light"] .card,
+html[data-glass="on"][data-theme="light"] .stat-box,
+html[data-glass="on"][data-theme="light"] .modal,
+html[data-glass="on"][data-theme="light"] .fs-card {
+  background: linear-gradient(157deg, rgba(255,255,255,.82), rgba(255,255,255,.60) 48%, rgba(255,255,255,.72));
+}
+
+/* ---------- 眼控可点性：玻璃下把所有可点目标提亮、加清晰边界 ---------- */
+/* 主按钮保留强对比渐变，不让它被半透明吞掉；描边按钮补一层实色底 */
+html[data-glass="on"] .btn:not(.primary):not(.ghost):not(.link),
+html[data-glass="on"] .icon-btn,
+html[data-glass="on"] .rail-btn,
+html[data-glass="on"] .chip-btn,
+html[data-glass="on"] .fs-seg button {
+  background: rgba(255, 255, 255, .13);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-color: rgba(255, 255, 255, .26);
+}
+html[data-glass="on"] .btn.primary {
+  background: linear-gradient(135deg, var(--mint), var(--ice));
+  color: #04110f;
+  border-color: rgba(255, 255, 255, .45);
+  box-shadow: 0 8px 26px -10px var(--mint), inset 0 1px 0 rgba(255,255,255,.5);
+}
+html[data-glass="on"][data-theme="light"] .btn.primary { color: #fff; }
+
+html[data-glass="on"] .rail-more-menu {
+  background: rgba(11, 23, 36, .82);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  border-color: var(--glass-line);
+}
+html[data-glass="on"][data-theme="light"] .rail-more-menu { background: rgba(245, 250, 252, .92); }
+html[data-glass="on"] .rail-more-toggle.open {
+  background: rgba(95, 227, 184, .16);
+  border-color: rgba(95, 227, 184, .5);
+  color: var(--mint);
+}
+
+/* 注视光环在玻璃背景上要更亮 */
+html[data-glass="on"] .tile.is-target,
+html[data-glass="on"] .gaze-target-active {
+  border-color: rgba(95, 227, 184, .85);
+}
+
+/* ---------- 专注会话专属：环形与数字提亮 ---------- */
+html[data-glass="on"] .fs-ring .fg { stroke: var(--mint); filter: drop-shadow(0 0 8px rgba(95,227,184,.55)); }
+html[data-glass="on"] .fs-ring-txt b { color: var(--text); text-shadow: 0 2px 24px rgba(130,230,240,.4); }
+
+/* ---------- 窄屏：关掉重模糊，保性能 ---------- */
+@media (max-width: 760px) {
+  html[data-glass="on"] .card,
+  html[data-glass="on"] .fs-card,
+  html[data-glass="on"] .stat-box {
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+  }
+}
