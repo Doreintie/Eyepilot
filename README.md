@@ -429,4 +429,5 @@ node tools/test-core.mjs
 
 - [`docs/提案书.md`](docs/提案书.md) — 问题、方案、技术、创新点、可行性与商业化
 - [`docs/演示脚本.md`](docs/演示脚本.md) — 3 分钟答辩脚本 + 评委问答 + 提交前检查清单
+- [`docs/EyePilot-自律版-技术与交接总文档.md`](docs/EyePilot-自律版-技术与交接总文档.md) — 自律方向总文档：能力边界、F1–F12 功能规格、阈值依据、交接与验收
 - [`docs/插件开发指南.md`](docs/插件开发指南.md) — API 与外部程序接入方式
