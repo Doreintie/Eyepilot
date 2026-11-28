@@ -280,6 +280,10 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 }
 .rail-more-menu .rail-btn svg { width: 18px; height: 18px; }
 .rail-more-menu .rail-btn.active::before { display: none; }
+/* 大按钮模式会把侧栏按钮整体放大，弹出的菜单不跟着变胖，否则 3 项就要 230px 高 */
+.eye-ui .rail-more-menu .rail-btn { padding: 8px 3px 7px; }
+.eye-ui .rail-more-menu .rail-btn svg { width: 18px; height: 18px; }
+.eye-ui .rail-more-menu .rail-btn span { font-size: 10.5px; }
 @keyframes moreIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
 
 /* ===================== views ===================== */
@@ -1087,7 +1091,7 @@ input[type="range"]::-webkit-slider-thumb {
   font-family: var(--mono); font-size: 10.5px; color: var(--text);
 }
 .island-preview {
-  border-radius: 12px; overflow: hidden; height: 88px; margin: 0 auto 12px;
+  border-radius: 12px; overflow: hidden; height: 58px; margin: 0 auto 12px;
   width: 100%; max-width: 470px;
   border: 1px solid var(--line-2); background: #05070c;
   transition: height .26s var(--ease);

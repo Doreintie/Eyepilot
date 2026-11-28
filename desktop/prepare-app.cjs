@@ -40,6 +40,7 @@ fs.writeFileSync(path.join(out, 'package.json'), JSON.stringify({
   productName: 'EyePilot',
   version: pkg.version || '1.3.0',
   description: 'EyePilot · 瞳行 — AI 眼控与用眼健康助手',
+  author: 'EyePilot · 瞳行',
   main: 'main.cjs',
   dependencies: runtimeDeps,
 }, null, 2));
