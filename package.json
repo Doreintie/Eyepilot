@@ -3,7 +3,7 @@
   "version": "1.9.0",
   "private": true,
   "type": "module",
-  "description": "EyePilot · 瞳行 — 摄像头眼动追踪 + AI 用眼健康教练（黑客松 Demo）",
+  "description": "EyePilot · 瞳行 — AI 专注与护眼助手（黑客松 Demo）",
   "scripts": {
     "start": "python serve.py",
     "test": "node tools/test-core.mjs"
