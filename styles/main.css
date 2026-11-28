@@ -253,7 +253,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 }
 .rail-more-menu {
   position: absolute; left: calc(100% + 8px); bottom: 0; z-index: 40;
-  width: 106px; padding: 6px;
+  width: 92px; padding: 6px;
   display: flex; flex-direction: column; gap: 3px;
   /* 不透明度由「设置 → 外观 → 更多菜单」控制，默认接近实心，保证在照片上也读得清 */
   background:
