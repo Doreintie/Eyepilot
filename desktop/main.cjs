@@ -304,7 +304,15 @@ async function startServer() {
       try { srv.close(); } catch { /* noop */ }
     }
   }
-  throw lastErr || new Error('没有可用端口');
+  // 全部被占用时退回随机端口：至少能启动，只是本次的本地设置不沿用
+  const srv = http.createServer(serveFile);
+  await new Promise((resolve, reject) => {
+    srv.once('error', reject);
+    srv.listen(0, '127.0.0.1', resolve);
+  });
+  server = srv;
+  console.warn('[EyePilot] 固定端口都被占用，改用随机端口', srv.address().port);
+  return srv.address().port;
 }
 
 /* ---------------- 手机互联：按需在 0.0.0.0 上开一个监听 ---------------- */
