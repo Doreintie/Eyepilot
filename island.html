@@ -51,6 +51,13 @@
   .blink b { font-size: 15px; font-weight: 650; line-height: 1; font-variant-numeric: tabular-nums; }
   .blink span { font-size: 9px; color: var(--dim); }
 
+  /* 视距：和眨眼并排；过近时这条会临时变成「距离太近」 */
+  .dist { display: flex; align-items: baseline; gap: 3px; flex: none; }
+  .dist b { font-size: 13px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+  .dist span { font-size: 9px; color: var(--dim); }
+  .dist.warn b { color: var(--amber); }
+  .dist.alert b { font-size: 11.5px; color: var(--amber); letter-spacing: .2px; }
+
   /* 专注胶囊出现时把「次/分」单位收起来，给模式按钮腾位置 */
   .bar:has(.focus-chip.show) .blink span { font-size: 9px; }
   .bar:has(.focus-chip.show) .blink b { font-size: 14px; }
@@ -62,6 +69,26 @@
     transition: all .18s;
   }
   .mode:hover { color: var(--text); background: rgba(255, 255, 255, .07); }
+  /* 只显示当前操控方式；点它把整条切换成四选一，不展开面板也不加高窗口 */
+  .mode-now {
+    -webkit-app-region: no-drag; flex: none; margin-left: auto;
+    display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 5px;
+    border-radius: 7px; cursor: pointer; font-family: inherit; font-size: 10.5px;
+    color: var(--accent); background: rgba(46, 230, 214, .10);
+    border: 1px solid rgba(46, 230, 214, .26);
+  }
+  .mode-now:hover { background: rgba(46, 230, 214, .18); }
+  .mode-now svg { width: 9px; height: 9px; }
+  .mode-pick { display: none; align-items: center; gap: 3px; margin-left: auto; -webkit-app-region: no-drag; }
+  .bar.picking .blink, .bar.picking .dist, .bar.picking .focus-chip,
+  .bar.picking .alert-line, .bar.picking .mode-now, .bar.picking .chev { display: none; }
+  .bar.picking .mode-pick { display: flex; margin-left: 0; flex: 1; justify-content: center; }
+  .mode-pick .mode.on { color: #06110f; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  .mode-pick .mode-x {
+    width: 20px; height: 20px; border-radius: 6px; border: none; background: transparent;
+    color: var(--dim); cursor: pointer; font-size: 13px; line-height: 1;
+  }
+  .mode-pick .mode-x:hover { color: var(--text); background: rgba(255, 255, 255, .08); }
   .focus-chip {
     display: none; align-items: center; padding: 2px 6px; border-radius: 5px;
     font-family: var(--mono); font-size: 10.5px; color: var(--accent);
@@ -75,7 +102,7 @@
     text-overflow: ellipsis; font-size: 10.5px; color: var(--amber);
   }
   .bar.alerting .alert-line { display: block; }
-  .bar.alerting .blink, .bar.alerting .focus-chip { display: none; }
+  .bar.alerting .blink, .bar.alerting .focus-chip, .bar.alerting .dist { display: none; }
   .mode.on {
     color: #06110f; background: var(--accent); border-color: var(--accent); font-weight: 700;
   }
@@ -147,16 +174,22 @@
 </head>
 <body>
   <div id="island">
-    <div class="bar">
+    <div class="bar" id="bar">
       <i class="dot idle" id="dot"></i>
       <div class="blink"><b id="blink">--</b><span>次/分</span></div>
       <div class="focus-chip" id="focusChip" title="专注会话剩余时间"><b>--:--</b></div>
+      <div class="dist" id="distChip" title="人脸到屏幕的估算距离"><b id="distVal">--</b><span>cm</span></div>
       <div class="alert-line" id="alertLine"></div>
-      <div class="modes">
+      <button class="mode-now" id="modeNow" title="当前操控方式，点击切换">
+        <b id="modeNowTx">眼</b>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="mode-pick" id="modePick">
         <button class="mode" data-mode="eye" title="纯眼控：虹膜决定光标，鼠标随时可接管">眼</button>
         <button class="mode" data-mode="hybrid" title="眼 + 鼠：眼睛和鼠标同时有效">混</button>
         <button class="mode" data-mode="head" title="眼 + 头：头定方向，虹膜精修">头</button>
         <button class="mode" data-mode="mouse" title="纯鼠标：眼控关闭，护眼与专注照常">鼠</button>
+        <button class="mode-x" id="modePickClose" title="收起">×</button>
       </div>
       <button class="chev" id="chev" title="展开">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
@@ -200,6 +233,9 @@
   let lastAlertTs = 0;
   let peekTimer = 0;
   let mode = 'eye';
+  let lastTooClose = false;
+  let closeAlertUntil = 0;
+  const MODE_TX = { eye: '眼', hybrid: '混', head: '头', mouse: '鼠' };
 
   // 设置页会把「勾了哪些指标 / 自定义内容」推过来，预览要和真机一致
   const cfg = {
@@ -249,11 +285,28 @@
     setExpanded(!expanded);
   });
 
+  const barEl = document.querySelector('.bar');
+  const modeNow = $('modeNow');
+  const modePick = $('modePick');
+  const setPicking = (on) => {
+    barEl.classList.toggle('picking', on);
+    modePick.hidden = !on;
+  };
+  modeNow.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setPicking(!barEl.classList.contains('picking'));
+  });
+  $('modePickClose').addEventListener('click', (e) => {
+    e.stopPropagation();
+    setPicking(false);
+  });
+
   document.querySelectorAll('.mode').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       mode = btn.dataset.mode;
       paintMode();
+      setPicking(false);
       // 预览只改自己，不去动真实输入方式，避免「只是看看」却把眼控切走
       if (!preview && host && host.action) host.action('mode:' + mode);
     });
@@ -268,6 +321,29 @@
 
   function paintMode() {
     document.querySelectorAll('.mode').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+    const tx = $('modeNowTx');
+    if (tx) tx.textContent = MODE_TX[mode] || '眼';
+  }
+
+  // 距离过近：先亮 2.5 秒「距离太近」，再回到真实距离（仍然偏近时用琥珀色）
+  function paintDistance(dist) {
+    const chip = $('distChip');
+    const unit = chip.querySelector('span');
+    const too = dist > 0 && dist < 42;
+    const now = Date.now();
+    if (too && !lastTooClose) closeAlertUntil = now + 2500;
+    lastTooClose = too;
+    const alerting = too && now < closeAlertUntil;
+    chip.style.display = dist > 0 ? '' : 'none';
+    chip.classList.toggle('alert', alerting);
+    chip.classList.toggle('warn', too && !alerting);
+    if (alerting) {
+      $('distVal').textContent = '距离太近';
+      unit.style.display = 'none';
+    } else {
+      $('distVal').textContent = dist > 0 ? String(dist) : '--';
+      unit.style.display = '';
+    }
   }
 
   function applyVisibility() {
@@ -305,6 +381,7 @@
     const lv = levelOf(p);
     $('dot').className = 'dot ' + (lv === 'on' ? '' : lv);
     $('blink').textContent = p.blink > 0 ? p.blink : '--';
+    paintDistance(Math.round(Number(p.distance) || 0));
 
     $('cSession').textContent = clock(p.session || 0);
     $('cFatigue').textContent = p.fatigue || '--';
@@ -356,6 +433,7 @@
       render({
         live: true,
         blink: cfg.items.blink === false ? 0 : 17,
+        distance: 58,
         session: 4280,
         fatigue: cfg.items.fatigue === false ? 0 : 28,
         health: cfg.items.health === false ? 0 : 82,
@@ -396,6 +474,7 @@
 
   if (host && host.resize) host.resize(300, COLLAPSED);
   applyVisibility();
+  paintMode();
   tick();
   setInterval(tick, 800);
 })();

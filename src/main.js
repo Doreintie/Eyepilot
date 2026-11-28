@@ -282,8 +282,10 @@ async function startCamera() {
   setPrimaryButton('加载中…', true);
   setStatus('model', 'warn', '模型加载中');
   setStatus('cam', 'warn', '相机启动中');
+  ui.armSlowHint('正在加载中……请稍后', '首次启动要加载视觉模型与摄像头，通常 3–8 秒');
   try {
     await vision.start(app.settings.cameraId);
+    ui.disarmSlowHint();
     app.mode = 'running';
     app.sessionStart = Date.now();
     setStatus('cam', 'on', '相机就绪');
@@ -304,6 +306,7 @@ async function startCamera() {
       }
     }
   } catch (err) {
+    ui.disarmSlowHint();
     console.error(err);
     app.mode = 'idle';
     setStatus('cam', 'bad', '相机不可用');
@@ -617,6 +620,13 @@ const actions = {
     saveSettings({ moreOpacity: Math.max(45, Math.min(100, Number(v) || 92)) });
     ui.applyAppearance();
   },
+  setCardAlpha: (v) => {
+    saveSettings({ cardAlpha: Math.max(20, Math.min(100, Number(v) || 58)) });
+    ui.applyAppearance();
+  },
+  resetLayout: () => {
+    ui.resetLayout();
+  },
   installPlugins: async (files) => {
     const r = await installFromFiles(files);
     if (r.added.length) {
@@ -834,6 +844,7 @@ function islandPayload() {
     live: app.mode === 'running' || app.mode === 'demo',
     mode: app.settings.controlMode || 'eye',
     blink: Math.round(m.blinkRate || 0),
+    distance: Math.round(m.distance || 0),
     fatigue: Math.round(m.fatigue || 0),
     health: Math.round(m.health || 0),
     focus: Math.round(m.focus || 0),
@@ -871,6 +882,8 @@ let pausedByTray = false;
 function bindDesktop() {
   const d = window.eyePilotDesktop;
   if (!d || !d.onAction) return;
+  // 把「关窗口是否留在托盘」同步给主进程，默认留在托盘
+  if (d.app && d.app.setCloseBehavior) d.app.setCloseBehavior(app.settings.closeToTray !== false);
   d.onAction((name) => {
     if (name === 'calibrate') { showView('console'); calibrate(false); }
     else if (name === 'refine') { showView('settings'); ui.startAlign(); }
@@ -927,7 +940,9 @@ function boot() {
   demo = new DemoEngine({ overlay, onFrame: handleDemoFrame });
 
   ui.init(actions);
-  initOnboarding({ setView: showView });
+  window.__eyePilotReady = true;
+  ui.hideLoading();
+  initOnboarding({ setView: showView, setPane: showSettingsPane });
   // 须知放在这里显示：DOM 已就绪，同时还在首帧渲染之前
   const gateDone = bootGate();
   setCameraLocked((app.settings.cameraConsent || '') === 'denied');

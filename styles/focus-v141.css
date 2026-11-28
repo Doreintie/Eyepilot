@@ -137,8 +137,9 @@
 #focusSessionRoot .fv-btn.primary:hover { filter: brightness(1.06); }
 #focusSessionRoot .fv-note { font-size: 11.5px; color: var(--fv-ink-3); text-align: center; line-height: 1.6; margin-top: 10px; position: relative; z-index: 1; }
 
-/* 右：卡片列 */
-#focusSessionRoot .fv-rail { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 12px; }
+/* 右：只留「当前状态」一张卡，其余收进下方「更多数据」 */
+#focusSessionRoot .fv-rail { display: block; }
+#focusSessionRoot .fv-score-card { position: sticky; top: 0; }
 #focusSessionRoot .fv-pad { padding: 14px 16px; }
 #focusSessionRoot .fv-card-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
 #focusSessionRoot .fv-card-h h3 { font-size: 10.5px; letter-spacing: 2.2px; text-transform: uppercase; color: var(--fv-ink-3); font-weight: 700; }
@@ -171,6 +172,31 @@
 
 #focusSessionRoot .fv-insight { display: flex; flex-direction: column; justify-content: center; }
 #focusSessionRoot .fv-insight p { font-size: 12px; line-height: 1.62; color: var(--fv-ink-2); }
+
+/* 更多数据（默认折叠，降低权重） */
+#focusSessionRoot .fv-more { padding: 0 18px 12px; }
+#focusSessionRoot .fv-more summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px;
+  padding: 13px 2px 11px; user-select: none;
+}
+#focusSessionRoot .fv-more summary::-webkit-details-marker { display: none; }
+#focusSessionRoot .fv-more summary b {
+  font-size: 10.5px; letter-spacing: 2.2px; text-transform: uppercase; color: var(--fv-ink-3); font-weight: 700;
+}
+#focusSessionRoot .fv-more summary span { font-size: 11.5px; color: var(--fv-ink-3); }
+#focusSessionRoot .fv-more-chev {
+  margin-left: auto; width: 8px; height: 8px; flex: none;
+  border-right: 1.5px solid var(--fv-ink-3); border-bottom: 1.5px solid var(--fv-ink-3);
+  transform: rotate(45deg); transition: transform .2s;
+}
+#focusSessionRoot .fv-more[open] .fv-more-chev { transform: rotate(-135deg); }
+#focusSessionRoot .fv-more-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 10px; }
+#focusSessionRoot .fv-more-grid > section {
+  border: 1px solid var(--fv-line-soft); border-radius: 14px; padding: 10px 12px;
+  background: rgba(255, 255, 255, .035);
+}
+#focusSessionRoot .fv-more .fv-foot { margin-top: 10px; }
+#focusSessionRoot .fv-more .fv-insight { display: flex; flex-direction: column; justify-content: center; }
 
 /* 时间轴 */
 #focusSessionRoot .fv-tl { padding: 13px 20px 14px; }
@@ -214,6 +240,7 @@
 @media (max-width: 1020px) {
   #focusSessionRoot .fv-main { grid-template-columns: 1fr; }
   #focusSessionRoot .fv-ring { width: min(300px, 62vw, 100%); }
-  #focusSessionRoot .fv-rail { grid-template-rows: auto auto auto; }
+  #focusSessionRoot .fv-score-card { position: static; }
   #focusSessionRoot .fv-legend { display: none; }
+  #focusSessionRoot .fv-more-grid { grid-template-columns: minmax(0, 1fr); }
 }

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>EyePilot · 瞳行 — AI 眼控与用眼健康助手</title>
-<meta name="description" content="用电脑摄像头实现眼动追踪：用眼睛代替鼠标，并由 AI 实时分析用眼健康。" />
+<title>EyePilot · 瞳行 — AI 专注与护眼助手</title>
+<meta name="description" content="用普通摄像头读懂你的专注与用眼状态：25 分钟专注会话、眨眼与视距监测、护眼训练与 AI 建议，全部在本机完成。" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%230a0d14'/%3E%3Cellipse cx='32' cy='32' rx='21' ry='13' fill='none' stroke='%2322d3ee' stroke-width='3'/%3E%3Ccircle cx='32' cy='32' r='7' fill='%2322d3ee'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="./styles/main.css" />
 <link rel="stylesheet" href="./styles/glass.css" />
@@ -35,9 +35,6 @@
     <div class="topbar-actions">
       <button class="icon-btn" id="btnBig" title="大按钮模式：放大所有可点目标，眼控更容易命中">
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg><span>大按钮</span>
-      </button>
-      <button class="icon-btn" id="btnDemo" title="演示模式：用鼠标模拟视线，适合无摄像头场景">
-        <svg viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg><span>演示</span>
       </button>
       <button class="icon-btn" id="btnTheme" title="切换主题">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
@@ -113,7 +110,7 @@
           <button class="icon-btn" data-help="focus" data-gaze title="专注分怎么算" aria-label="专注分怎么算">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.1a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.5"/><circle cx="12" cy="17.2" r="1.05"/></svg>
           </button>
-          <span class="pill tiny">真实眼控驱动</span>
+          <span class="pill tiny" id="focusLivePill"><i class="dot"></i>摄像头未启动</span>
         </div>
       </div>
       <div class="focus-view" id="focusSessionRoot"></div>
@@ -130,6 +127,9 @@
             </div>
             <div class="head-tools">
               <span class="pill" id="gazeStatePill"><i class="dot"></i>等待视线</span>
+              <button class="icon-btn" id="btnDemo" title="演示模式：没有摄像头时，用鼠标位置模拟视线，其余流程完全一致">
+                <svg viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg><span>演示</span>
+              </button>
               <button class="btn ghost sm" data-action="calibrate" data-gaze>校准</button>
             </div>
           </div>
@@ -206,8 +206,9 @@
           </div>
         </div>
 
-        <div class="side-col">
-          <div class="card cam-card">
+        <div class="side-col" data-drag-list="console-side">
+          <div class="card cam-card" data-drag-id="cam">
+            <div class="card-head"><h3>摄像头</h3><span class="pill tiny">本地画面</span></div>
             <div class="cam-wrap" id="camWrap">
               <video id="cam" playsinline muted autoplay></video>
               <canvas id="camOverlay"></canvas>
@@ -227,7 +228,7 @@
             </div>
           </div>
 
-          <div class="card tip-card" id="aiTipCard">
+          <div class="card tip-card" id="aiTipCard" data-drag-id="tip">
             <div class="tip-head">
               <span class="tip-ico">
                 <svg viewBox="0 0 24 24"><path d="M12 3.2l1.7 4.4 4.4 1.7-4.4 1.7L12 15.4l-1.7-4.4L5.9 9.3l4.4-1.7L12 3.2Z"/><path d="M18 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z"/></svg>
@@ -240,13 +241,13 @@
             <div class="tip-foot"><button class="btn link" data-nav="coach" data-gaze>查看完整分析 →</button></div>
           </div>
 
-          <div class="card break-card">
+          <div class="card break-card" data-drag-id="break">
+            <div class="card-head"><h3>护眼节律</h3><span class="pill tiny">20-20-20</span></div>
             <div class="break-ring" id="breakRing">
               <svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="43"/><circle class="fg" id="breakArc" cx="50" cy="50" r="43"/></svg>
               <div class="break-ring-txt"><b id="breakTimer">20:00</b><span>下次休息</span></div>
             </div>
             <div class="break-info">
-              <h4>20-20-20 护眼节律</h4>
               <p id="breakDesc">每用眼 20 分钟，看 6 米外 20 秒。AI 会自动带你做一次远眺。</p>
               <button class="btn ghost sm" id="btnBreakNow" data-gaze>立即远眺 20 秒</button>
             </div>
@@ -265,8 +266,8 @@
         <span class="pill tiny">无需摄像头</span>
       </div>
 
-      <div class="care-grid">
-        <div class="card care-player">
+      <div class="care-grid" data-drag-list="care">
+        <div class="card care-player" data-drag-id="care-player">
           <div class="care-stage">
             <span class="care-index" id="careIndex">01 / 06</span>
             <h2 id="careName">揉攒竹</h2>
@@ -284,13 +285,13 @@
           <p class="fine">做的时候把眼镜摘掉；按压以酸胀不痛为准，别压眼球。</p>
         </div>
 
-        <div class="card care-list-card">
+        <div class="card care-list-card" data-drag-id="care-list">
           <div class="card-head"><h3>六节眼保健操</h3><span class="pill tiny">循经按穴</span></div>
           <div class="care-list" id="careList"></div>
         </div>
       </div>
 
-      <div class="care-tips">
+      <div class="care-tips" data-drag-list="care-tips">
         <div class="card"><div class="card-head"><h3>20-20-20</h3></div><p class="body-text">每用眼 20 分钟，看 20 英尺（约 6 米）外 20 秒。本程序会在第 20 分钟弹远眺提示。</p></div>
         <div class="card"><div class="card-head"><h3>距离与高度</h3></div><p class="body-text">屏幕距眼 50–65 cm，屏幕上沿略低于视线。太低会让人低头，太高会让眼球上翻。</p></div>
         <div class="card"><div class="card-head"><h3>光线</h3></div><p class="body-text">环境光与屏幕亮度接近，别在暗房间里只看屏幕；背后不要有直射亮窗。</p></div>
@@ -322,32 +323,32 @@
         <div class="kpi"><span>疲劳指数</span><b id="kFatigue">--</b><em>/100</em><i class="bar"><u id="kFatigueBar"></u></i></div>
       </div>
 
-      <div class="chart-grid">
-        <div class="card chart-card">
+      <div class="chart-grid" data-drag-list="health-charts">
+        <div class="card chart-card" data-drag-id="chart-blink">
           <div class="card-head"><h3>眨眼频率</h3><span class="pill tiny">近 10 分钟 · 次/分</span></div>
           <canvas id="chartBlink" height="180"></canvas>
         </div>
-        <div class="card chart-card">
+        <div class="card chart-card" data-drag-id="chart-fatigue">
           <div class="card-head"><h3>疲劳 / 闭眼占比</h3><span class="legend"><span><i class="c1"></i>疲劳</span><span><i class="c2"></i>闭眼占比</span></span></div>
           <canvas id="chartFatigue" height="180"></canvas>
         </div>
-        <div class="card chart-card">
+        <div class="card chart-card" data-drag-id="chart-distance">
           <div class="card-head"><h3>视距</h3><span class="pill tiny">近 10 分钟 · cm</span></div>
           <canvas id="chartDistance" height="180"></canvas>
         </div>
-        <div class="card chart-card">
+        <div class="card chart-card" data-drag-id="chart-light">
           <div class="card-head"><h3>环境照度</h3><span class="pill tiny">近 10 分钟 · 相对值</span></div>
           <canvas id="chartLight" height="180"></canvas>
         </div>
       </div>
 
-      <div class="health-bottom">
-        <div class="card heat-card">
+      <div class="health-bottom" data-drag-list="health-bottom">
+        <div class="card heat-card" data-drag-id="heat">
           <div class="card-head"><h3>注视热力图</h3><span class="pill tiny" id="heatMeta">等待数据</span></div>
           <div class="heat-wrap"><canvas id="heatmap" width="880" height="440"></canvas><div class="heat-grid"></div></div>
           <p class="fine">热区越亮，说明视线停留越久。长期偏左/偏上往往意味着坐姿或屏幕高度不合适。</p>
         </div>
-        <div class="card alert-card">
+        <div class="card alert-card" data-drag-id="alerts">
           <div class="card-head"><h3>提醒记录</h3><button class="btn link sm" id="btnClearAlerts">清空</button></div>
           <div class="alert-list" id="alertList"><p class="empty">暂时没有提醒，继续保持。</p></div>
         </div>
@@ -366,8 +367,8 @@
         </div>
       </div>
 
-      <div class="coach-grid">
-        <div class="card assess-card">
+      <div class="coach-grid" data-drag-list="coach">
+        <div class="card assess-card" data-drag-id="assess">
           <div class="assess-head">
             <div class="score-ring" id="coachRing">
               <svg viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="50"/><circle class="fg" id="coachArc" cx="60" cy="60" r="50"/></svg>
@@ -401,7 +402,7 @@
           </div>
         </div>
 
-        <div class="card chat-card">
+        <div class="card chat-card" data-drag-id="chat">
           <div class="card-head">
             <h3>问问教练</h3>
             <span class="pill tiny" id="chatEnginePill">本地</span>
@@ -517,6 +518,19 @@
         <div class="set-body" id="setBody"></div>
 
       <div class="settings-grid" id="setSource" hidden>
+        <div class="card">
+          <div class="card-head"><h3>通用</h3><span class="pill tiny" id="generalPill">桌面版</span></div>
+          <p class="body-text">不属于健康与眼控的偏好：窗口怎么退出、卡片怎么摆，都在这里。</p>
+          <label class="switch-row">关闭窗口后继续在后台运行
+            <input type="checkbox" id="setCloseToTray" checked /><i class="switch"></i>
+          </label>
+          <p class="fine" id="closeHint">开：点 × 收进托盘，用眼记录与提醒继续；关：点 × 直接退出程序。</p>
+          <div class="row-between" style="margin-top:14px">
+            <span class="fine">拖动卡片标题右侧的 ⠿ 手柄可以换位置，顺序会自动保存。</span>
+            <button class="btn ghost sm" id="btnResetLayout">重置组件布局</button>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-head"><h3>眼控</h3></div>
           <div class="form-grid">
@@ -656,6 +670,18 @@
             <button class="btn ghost sm" id="btnPhoneAlign" data-gaze>手机五点对齐</button>
             <button class="btn link sm" id="btnPhoneReset">重置手机校正</button>
           </div>
+          <div class="phone-connect">
+            <div class="phone-qr" id="phoneQr"><span class="phone-qr-empty">开启局域网后<br />这里出现二维码</span></div>
+            <div class="phone-steps">
+              <b>手机扫码，四步连上</b>
+              <ol>
+                <li>手机和电脑连<b>同一个 Wi-Fi</b>；电脑别连 VPN / 加速器。</li>
+                <li>用手机相机扫左边二维码（或手动输入上面的地址）。</li>
+                <li>浏览器提示「<b>您的连接不是私密连接</b>」时，点「高级 → 继续前往」——这是本机自签证书，不是被劫持。</li>
+                <li>点「开始推流」，并<b>保持这个页面在前台</b>；手机锁屏或切后台会暂停。</li>
+              </ol>
+            </div>
+          </div>
           <p class="fine" id="phoneDetail">手机与电脑连同一个 Wi-Fi，用手机浏览器打开地址。</p>
         </div>
 
@@ -710,8 +736,15 @@
           </div>
           <label class="range-row" style="margin-top:10px"><span>背景遮罩</span><input type="range" id="setBgDim" min="0" max="85" step="5" value="45" /><b id="bgDimHint">45%</b></label>
           <label class="range-row"><span>更多菜单</span><input type="range" id="setMoreAlpha" min="45" max="100" step="5" value="92" /><b id="moreAlphaHint">92%</b></label>
+          <label class="range-row"><span>面板不透明</span><input type="range" id="setCardAlpha" min="20" max="100" step="5" value="60" /><b id="cardAlphaHint">60%</b></label>
+          <div class="apx-row">
+            <div class="apx" id="apxBg"><b>背景遮罩</b><small id="apxBgVal">45%</small></div>
+            <div class="apx apx-menu" id="apxMenu"><b>更多菜单</b><small id="apxMenuVal">92%</small>
+              <div class="apx-menu-card" id="apxMenuCard"><i>插件中心</i><i>手机摄像头</i><i>设置</i></div>
+            </div>
+          </div>
           <p class="fine" id="bgHint">没有自定义背景，使用主题默认底纹。</p>
-          <p class="fine">「更多菜单」是左下角更多按钮展开后的底色不透明度：越低越透、越高越好读。</p>
+          <p class="fine">「面板不透明」控制卡片、顶栏、侧栏的玻璃底色；调到 40% 以下会更透，字也更难读。</p>
         </div>
 
         <div class="card">
@@ -733,8 +766,9 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.8.0</span></div>
-          <p class="body-text">EyePilot · 瞳行，校园黑客松参赛作品。技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移特征 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件，普通笔记本摄像头即可运行。</p>
+          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.9.0</span></div>
+          <p class="body-text">EyePilot · 瞳行 — <b>AI 专注与护眼助手</b>。用一颗普通摄像头读懂你的专注与用眼状态：25 分钟专注会话、眨眼 / 视距 / 光照监测、护眼训练与 AI 建议。眼控是可选的输入方式之一，不开摄像头也能用计时与护眼。</p>
+          <p class="body-text">技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件。</p>
           <p class="fine">本作品不构成医疗建议。若持续眼干、眼痛或视力模糊，请就医。</p>
         </div>
       </div>
@@ -816,6 +850,22 @@
   </div>
 </div>
 
+<div class="loading-gate" id="loadingGate" hidden>
+  <div class="loading-box">
+    <i class="loading-spin" aria-hidden="true"></i>
+    <b id="loadingText">正在加载中……请稍后</b>
+    <small id="loadingSub">首次启动要加载本地视觉模型，通常 3–8 秒</small>
+  </div>
+</div>
+<script>
+  // 即使主模块还没跑起来，也要在 5 秒后告诉用户「在加载，不是卡死」
+  window.setTimeout(function () {
+    if (window.__eyePilotReady) return;
+    var el = document.getElementById('loadingGate');
+    if (el) el.hidden = false;
+  }, 5000);
+</script>
+
 <div class="modal-root" id="modalRoot"></div>
 <div class="toasts" id="toasts"></div>
 <canvas id="lightCanvas" width="64" height="48" hidden></canvas>
@@ -825,12 +875,15 @@
 <!-- ============ 启动须知 / 摄像头授权 / 首次教程 ============ -->
 <div class="gate" id="bootGate" role="dialog" aria-modal="true" aria-labelledby="bootGateTitle">
   <div class="gate-card">
-    <span class="eyebrow">BEFORE YOU START</span>
-    <h2 id="bootGateTitle">开始前，先说清楚</h2>
+    <span class="eyebrow">USER NOTICE</span>
+    <h2 id="bootGateTitle">用户须知</h2>
+    <p class="gate-lead">第一次打开请先看一遍。每一条都对应程序里的一个实际行为，不是套话。</p>
     <ul class="gate-list">
-      <li><b>画面不出这台电脑</b>：摄像头帧只在本地内存里推理，不上传、不录制、不保存。</li>
-      <li><b>不授权也能用</b>：计时、专注会话、护眼操和提醒不需要摄像头；眼控与疲劳分析需要。</li>
-      <li><b>随时可撤销</b>：设置 → 数据与隐私，可关闭摄像头、清除全部本地数据。</li>
+      <li><b>会用到摄像头</b>：眼控、专注判定、疲劳与视距分析需要读取画面。不允许也能用计时、专注会话、护眼操与提醒；之后可在设置里重新授权。</li>
+      <li><b>画面不出这台电脑</b>：所有推理在本机内存完成，不上传、不录制、不写磁盘。手机当摄像头时只回传 478 个关键点，不回传画面。</li>
+      <li><b>本地会保存什么</b>：校准参数、偏好设置、匿名用眼指标、你安装的插件。可在「设置 → 数据隐私」一键清除。</li>
+      <li><b>插件风险</b>：第三方插件是本地运行的 JS，能读取视线与健康指标（读不到摄像头画面），请只装你信任的来源。</li>
+      <li><b>免责声明</b>：这是校园黑客松参赛作品，不构成医学诊断；持续眼干、眼痛或视力模糊请及时就医。</li>
     </ul>
     <button class="btn primary" id="bootGateEnter" disabled>正在进入…</button>
     <p class="fine" id="bootGateTip">1 秒后自动进入</p>
@@ -856,14 +909,16 @@
   </div>
 </div>
 
-<div class="gate" id="tourGate" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
-  <div class="gate-card tour-card">
+<div class="tour-layer" id="tourGate" hidden>
+  <div class="tour-spot" id="tourSpot" aria-hidden="true"></div>
+  <div class="tour-bubble" id="tourBubble" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+    <i class="tour-arrow" id="tourArrow" aria-hidden="true"></i>
     <div class="tour-top">
-      <span class="eyebrow" id="tourKicker">TOUR 1 / 5</span>
+      <span class="eyebrow" id="tourKicker">TOUR 1 / 6</span>
       <button class="btn link sm" id="tourSkip">跳过教程</button>
     </div>
     <h2 id="tourTitle">专注会话</h2>
-    <p class="gate-lead" id="tourText">25 分钟一轮。眼睛离开屏幕、坐姿垮掉、眨眼变少，都会计入这一轮的分数。</p>
+    <p class="gate-lead" id="tourText">25 分钟一轮。</p>
     <div class="tour-dots" id="tourDots"></div>
     <div class="gate-actions">
       <button class="btn ghost" id="tourPrev">上一步</button>

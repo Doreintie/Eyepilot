@@ -9,6 +9,7 @@ import { pluginHost } from './plugins.js';
 import { lineChart, drawHeatmap } from './charts.js';
 import { clamp } from './core/math.js';
 import { reportToMarkdown } from './ai.js';
+import { drawQR } from './qr.js';
 
 const E = {};
 let actions = {};
@@ -44,7 +45,10 @@ const ids = [
   'btnReplayTour', 'btnRevokeCam', 'camConsentState',
   'setNav', 'setBody', 'setSource', 'btnHelp',
   'bgUpload', 'btnBgPick', 'btnBgClear', 'setBgDim', 'bgDimHint', 'bgHint',
-  'setMoreAlpha', 'moreAlphaHint',
+  'setMoreAlpha', 'moreAlphaHint', 'setCardAlpha', 'cardAlphaHint',
+  'apxBg', 'apxBgVal', 'apxMenu', 'apxMenuVal', 'apxMenuCard',
+  'setCloseToTray', 'closeHint', 'btnResetLayout', 'generalPill', 'phoneQr', 'focusLivePill',
+  'loadingGate', 'loadingText', 'loadingSub',
   'pluginDrop', 'pluginPick', 'pluginFile', 'pluginManager', 'pluginManageCount',
   'btnPluginRemove', 'pluginInstallMsg',
   'phonePill', 'phoneUrl', 'phoneDetail', 'phoneWeightHint', 'setPhoneWeight',
@@ -74,6 +78,8 @@ export const ui = {
     bindSettings();
     buildSettingsShell();
     bindAppearance();
+    bindGeneral();
+    initDragLayouts();
     bindHelp();
     bindPluginsUI();
     initHelp();
@@ -691,6 +697,7 @@ function bindCare() {
 /* ---------------- 设置：左类目 + 右内容 ---------------- */
 
 const SET_PANES = [
+  { key: 'general', label: '通用', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.2 12a7.2 7.2 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.5 3h-4l-.3 2.6a7 7 0 0 0-2 1.2l-2.3-.9-2 3.4 2 1.5a7.2 7.2 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2 1.2l.3 2.6h4l.3-2.6a7 7 0 0 0 2-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z"/></svg>' },
   { key: 'health', label: '健康提醒', icon: '<svg viewBox="0 0 24 24"><path d="M3 12.5h4l2.2-5.5 3.2 11 2.6-7 1.8 3.5H21"/></svg>' },
   { key: 'eye', label: '眼控', icon: '<svg viewBox="0 0 24 24"><path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12Z"/><circle cx="12" cy="12" r="3"/></svg>' },
   { key: 'island', label: '灵动岛', icon: '<svg viewBox="0 0 24 24"><rect x="2.8" y="8.2" width="18.4" height="7.6" rx="3.8"/><path d="M6.4 12h2.2"/><circle cx="17.6" cy="12" r=".9"/></svg>' },
@@ -700,6 +707,7 @@ const SET_PANES = [
 ];
 
 const CARD_PANE = {
+  通用: 'general',
   健康提醒: 'health',
   眼控: 'eye',
   输入方式: 'eye',
@@ -712,10 +720,10 @@ const CARD_PANE = {
   关于: 'about',
 };
 
-let setPaneKey = 'health';
+let setPaneKey = 'general';
 
 export function showSettingsPane(key) {
-  setPaneKey = key || 'health';
+  setPaneKey = key || 'general';
   $$('.set-tab').forEach((b) => b.classList.toggle('on', b.dataset.pane === setPaneKey));
   $$('.set-pane').forEach((p) => p.classList.toggle('on', p.dataset.pane === setPaneKey));
   if (setPaneKey === 'island') setTimeout(syncIslandPreview, 40);
@@ -778,6 +786,30 @@ export function applyAppearance() {
   if (E.moreAlphaHint) E.moreAlphaHint.textContent = `${Math.round(alpha)}%`;
   if (E.setMoreAlpha) E.setMoreAlpha.value = String(Math.round(alpha));
 
+  // 卡片空白处的底色不透明度：直接覆盖玻璃变量，主题切换时重算
+  const card = Math.max(20, Math.min(100, app.settings.cardAlpha == null ? 58 : app.settings.cardAlpha)) / 100;
+  const rgb = theme === 'light' ? '255, 255, 255' : '7, 17, 29';
+  const soft = theme === 'light' ? '255, 255, 255' : '8, 20, 33';
+  const strongRgb = theme === 'light' ? '255, 255, 255' : '6, 14, 25';
+  document.documentElement.style.setProperty('--glass-base', `rgba(${rgb}, ${card.toFixed(2)})`);
+  document.documentElement.style.setProperty('--glass-base-soft', `rgba(${soft}, ${card.toFixed(2)})`);
+  document.documentElement.style.setProperty('--glass-base-strong', `rgba(${strongRgb}, ${Math.min(1, card + 0.12).toFixed(2)})`);
+  if (E.cardAlphaHint) E.cardAlphaHint.textContent = `${Math.round(card * 100)}%`;
+  if (E.setCardAlpha) E.setCardAlpha.value = String(Math.round(card * 100));
+
+  // 外观里的两块实时预览
+  if (E.apxBg) {
+    const url = app.settings.bgImage || './assets/bg-iceland.jpg';
+    E.apxBg.style.backgroundImage = `url("${url}")`;
+    const dim = (app.settings.bgDim == null ? 45 : app.settings.bgDim) / 100;
+    const veil = theme === 'light'
+      ? `rgba(242, 246, 251, ${(0.34 + dim * 0.6).toFixed(3)})`
+      : `rgba(3, 6, 11, ${dim.toFixed(3)})`;
+    E.apxBg.style.setProperty('--apx-veil', veil);
+    if (E.apxBgVal) E.apxBgVal.textContent = `${app.settings.bgDim == null ? 45 : app.settings.bgDim}%`;
+  }
+  if (E.apxMenuVal) E.apxMenuVal.textContent = `${Math.round(alpha)}%`;
+
   $$('.mode-btn[data-theme-mode]').forEach((b) => b.classList.toggle('on', b.dataset.themeMode === mode));
   if (E.bgDimHint) E.bgDimHint.textContent = `${app.settings.bgDim == null ? 45 : app.settings.bgDim}%`;
   if (E.setBgDim) E.setBgDim.value = String(app.settings.bgDim == null ? 45 : app.settings.bgDim);
@@ -827,17 +859,55 @@ function bindAppearance() {
     E.btnBgClear.addEventListener('click', () => actions.setBgImage && actions.setBgImage(''));
   }
   if (E.setBgDim) {
-    E.setBgDim.addEventListener('input', () => { if (E.bgDimHint) E.bgDimHint.textContent = `${E.setBgDim.value}%`; });
+    E.setBgDim.addEventListener('input', () => {
+      app.settings.bgDim = Number(E.setBgDim.value);
+      applyAppearance();
+    });
     E.setBgDim.addEventListener('change', () => actions.setBgDim && actions.setBgDim(Number(E.setBgDim.value)));
   }
   if (E.setMoreAlpha) {
     E.setMoreAlpha.addEventListener('input', () => {
-      if (E.moreAlphaHint) E.moreAlphaHint.textContent = `${E.setMoreAlpha.value}%`;
-      document.documentElement.style.setProperty('--menu-alpha', (Number(E.setMoreAlpha.value) / 100).toFixed(2));
+      app.settings.moreOpacity = Number(E.setMoreAlpha.value);
+      applyAppearance();
     });
     E.setMoreAlpha.addEventListener('change', () => actions.setMoreAlpha && actions.setMoreAlpha(Number(E.setMoreAlpha.value)));
   }
+  if (E.setCardAlpha) {
+    E.setCardAlpha.addEventListener('input', () => {
+      app.settings.cardAlpha = Number(E.setCardAlpha.value);
+      applyAppearance();
+    });
+    E.setCardAlpha.addEventListener('change', () => actions.setCardAlpha && actions.setCardAlpha(Number(E.setCardAlpha.value)));
+  }
   bindIslandPreview();
+}
+
+/* ---------------- 通用：退出行为 / 布局 ---------------- */
+
+function bindGeneral() {
+  if (E.generalPill) E.generalPill.textContent = window.eyePilotDesktop ? '桌面版' : '网页版';
+  const sync = () => {
+    const on = app.settings.closeToTray !== false;
+    if (E.setCloseToTray) E.setCloseToTray.checked = on;
+    if (E.generalPill) E.generalPill.textContent = window.eyePilotDesktop ? (on ? '后台运行' : '关闭即退出') : '网页版';
+  };
+  if (E.setCloseToTray) {
+    E.setCloseToTray.addEventListener('change', () => {
+      const on = E.setCloseToTray.checked;
+      saveSettings({ closeToTray: on });
+      const d = window.eyePilotDesktop;
+      if (d && d.app && d.app.setCloseBehavior) d.app.setCloseBehavior(on);
+      if (!d) toast('网页版没有托盘', '这个开关只对桌面版（EyePilot.exe）生效', 'info', 3600);
+      sync();
+    });
+  }
+  if (E.btnResetLayout) {
+    E.btnResetLayout.addEventListener('click', () => {
+      actions.resetLayout && actions.resetLayout();
+      toast('布局已重置', '所有卡片回到默认顺序', 'good', 2600);
+    });
+  }
+  sync();
 }
 
 /* ---------------- 灵动岛预览：真实组件 + 同步设置 ---------------- */
@@ -871,6 +941,171 @@ function bindIslandPreview() {
       setTimeout(syncIslandPreview, 200);
     });
   }
+}
+
+/* ---------------- 拖动排序：卡片位置可换、顺序持久化 ---------------- */
+
+const layoutDefaults = new Map();
+
+const cardOf = (scope, node) => {
+  const c = node && node.closest ? node.closest('.card, .fv-glass') : null;
+  return c && c.parentElement === scope ? c : null;
+};
+
+function ensureDragId(card, scope) {
+  if (card.dataset.dragId) return card.dataset.dragId;
+  const h = card.querySelector('.card-head h3, .fv-card-h h3, .assess-head h3, h3, h2');
+  let base = (h ? h.textContent : '').trim().replace(/\s+/g, '-') || card.className.split(' ')[0];
+  let id = base;
+  let n = 2;
+  while ([...scope.children].some((c) => c !== card && c.dataset.dragId === id)) id = `${base}-${n++}`;
+  card.dataset.dragId = id;
+  return id;
+}
+
+function savedOrder(scope, key) {
+  const ids = [...scope.children]
+    .filter((c) => c.matches && c.matches('.card, .fv-glass'))
+    .map((c) => c.dataset.dragId);
+  const layout = { ...(app.settings.layout || {}), [key]: ids };
+  saveSettings({ layout });
+}
+
+function applyOrder(scope, ids) {
+  const all = [...scope.children].filter((c) => c.matches && c.matches('.card, .fv-glass'));
+  const map = new Map(all.map((c) => [c.dataset.dragId, c]));
+  const ordered = ids.map((id) => map.get(id)).filter(Boolean);
+  const rest = all.filter((c) => !ordered.includes(c));
+  ordered.concat(rest).forEach((c) => scope.appendChild(c));
+}
+
+function makeDraggable(card, scope, key) {
+  if (card.querySelector('.drag-handle')) return;
+  const head = card.querySelector('.card-head, .fv-card-h, .assess-head, .tip-head');
+  const handle = document.createElement('span');
+  handle.className = 'drag-handle';
+  handle.title = '按住拖动，换到别的位置';
+  handle.setAttribute('aria-hidden', 'true');
+  handle.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>';
+  if (head) head.appendChild(handle);
+  else {
+    handle.classList.add('floating');
+    card.appendChild(handle);
+  }
+
+  handle.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    startDrag(card, scope, key);
+  });
+}
+
+/**
+ * 指针拖动（不用 HTML5 DnD）：
+ * 鼠标、触摸、触控笔都是同一套逻辑，也方便自动化测试。
+ */
+function startDrag(card, scope, key) {
+  let over = null;
+  let after = false;
+  card.classList.add('dragging');
+  card.style.pointerEvents = 'none';
+  document.body.classList.add('is-dragging');
+
+  const clearMarks = () => {
+    [...scope.children].forEach((c) => c.classList.remove('drop-before', 'drop-after'));
+  };
+  const move = (ev) => {
+    const under = document.elementFromPoint(ev.clientX, ev.clientY);
+    const target = cardOf(scope, under);
+    if (target !== over) {
+      clearMarks();
+      over = null;
+      if (target && target !== card) {
+        over = target;
+        const r = target.getBoundingClientRect();
+        after = ev.clientY > r.top + r.height / 2;
+      }
+    }
+    if (over) {
+      const r = over.getBoundingClientRect();
+      after = ev.clientY > r.top + r.height / 2;
+      over.classList.toggle('drop-before', !after);
+      over.classList.toggle('drop-after', after);
+    }
+    // 靠近上下边缘时自动滚动
+    const views = document.getElementById('views');
+    if (views) {
+      const vr = views.getBoundingClientRect();
+      if (ev.clientY < vr.top + 36) views.scrollTop -= 14;
+      else if (ev.clientY > vr.bottom - 36) views.scrollTop += 14;
+    }
+  };
+  const up = () => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
+    card.classList.remove('dragging');
+    card.style.pointerEvents = '';
+    document.body.classList.remove('is-dragging');
+    clearMarks();
+    if (over) {
+      if (after) over.after(card);
+      else over.before(card);
+      savedOrder(scope, key);
+      actions.renderCharts && actions.renderCharts();
+    }
+    over = null;
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+}
+
+export function initDragLayouts() {
+  $$('[data-drag-list]').forEach((scope) => {
+    const key = scope.dataset.dragList;
+    const cards = [...scope.children].filter((c) => c.matches && c.matches('.card, .fv-glass'));
+    cards.forEach((c) => ensureDragId(c, scope));
+    layoutDefaults.set(key, cards.map((c) => c.dataset.dragId));
+    cards.forEach((c) => makeDraggable(c, scope, key));
+    const saved = (app.settings.layout || {})[key];
+    if (Array.isArray(saved) && saved.length) applyOrder(scope, saved);
+  });
+}
+
+export function resetLayout() {
+  saveSettings({ layout: {} });
+  $$('[data-drag-list]').forEach((scope) => {
+    const defs = layoutDefaults.get(scope.dataset.dragList);
+    if (defs) applyOrder(scope, defs);
+  });
+  actions.renderCharts && actions.renderCharts();
+}
+
+/* ---------------- 慢加载提示：超过 5 秒才出现 ---------------- */
+
+let slowTimer = 0;
+
+export function showLoading(text, sub) {
+  if (!E.loadingGate) return;
+  if (text && E.loadingText) E.loadingText.textContent = text;
+  if (E.loadingSub) E.loadingSub.textContent = sub || '首次启动要加载本地视觉模型，通常 3–8 秒';
+  E.loadingGate.hidden = false;
+}
+
+export function hideLoading() {
+  if (E.loadingGate) E.loadingGate.hidden = true;
+}
+
+/** 开始一个可能很慢的操作：5 秒内完成就什么都不显示 */
+export function armSlowHint(text, sub, ms = 5000) {
+  clearTimeout(slowTimer);
+  slowTimer = setTimeout(() => showLoading(text, sub), ms);
+}
+
+export function disarmSlowHint() {
+  clearTimeout(slowTimer);
+  hideLoading();
 }
 
 /* ---------------- 帮助 ---------------- */
@@ -964,17 +1199,21 @@ export function updatePhoneUI(stats) {
   if (E.phoneWeightHint) E.phoneWeightHint.textContent = `${w}%`;
 
   const on = !!(stats && stats.connected);
+  const info = app.phoneInfo;
   if (E.phonePill) {
     E.phonePill.textContent = on ? '已连接' : '未连接';
     E.phonePill.className = `pill tiny${on ? ' on' : ''}`;
   }
   if (E.phoneDetail) {
-    E.phoneDetail.textContent = on
-      ? `${stats.phone || '手机'} · ${stats.fps} fps · 延迟 ${stats.latency} ms · 丢帧 ${stats.dropped}`
-      : '① 手机连同一个 Wi-Fi　② 浏览器打开上面的地址　③ 点「开始推流」';
+    const noHttps = !!(info && info.lan && info.https === false);
+    E.phoneDetail.textContent = noHttps
+      ? '⚠ 这次没生成 HTTPS 证书（缺 openssl），手机浏览器会拒绝摄像头。装 Git for Windows 后重开程序，或改用 python serve.py --lan。'
+      : (on
+        ? `${stats.phone || '手机'} · ${stats.fps} fps · 延迟 ${stats.latency} ms · 丢帧 ${stats.dropped}`
+        : '① 手机连同一个 Wi-Fi　② 扫二维码或输入地址　③ 点「开始推流」');
+    E.phoneDetail.classList.toggle('warn-text', noHttps);
   }
 
-  const info = app.phoneInfo;
   if (E.phoneUrl) {
     if (info && info.lanUrl) {
       E.phoneUrl.textContent = info.lanUrl;
@@ -989,6 +1228,67 @@ export function updatePhoneUI(stats) {
     E.btnPhoneLan.textContent = info && info.lan ? '地址已开启' : '开启局域网';
     E.btnPhoneLan.disabled = !!(info && info.lan);
   }
+
+  // 二维码：只在地址变化时重画，避免每 500ms 刷一次
+  if (E.phoneQr) {
+    const url = info && info.lanUrl ? info.lanUrl : '';
+    if (url && E.phoneQr.dataset.url !== url) {
+      E.phoneQr.dataset.url = url;
+      E.phoneQr.innerHTML = '';
+      const cv = document.createElement('canvas');
+      E.phoneQr.appendChild(cv);
+      const ok = drawQR(cv, url, { size: 148 });
+      E.phoneQr.classList.toggle('ready', ok);
+      if (!ok) {
+        E.phoneQr.innerHTML = '<span class="phone-qr-empty">地址太长<br />改用复制地址</span>';
+      }
+    } else if (!url && E.phoneQr.dataset.url) {
+      E.phoneQr.dataset.url = '';
+      E.phoneQr.classList.remove('ready');
+      E.phoneQr.innerHTML = '<span class="phone-qr-empty">开启局域网后<br />这里出现二维码</span>';
+    } else if (!url) {
+      E.phoneQr.classList.remove('ready');
+      if (!E.phoneQr.querySelector('.phone-qr-empty')) {
+        E.phoneQr.innerHTML = '<span class="phone-qr-empty">开启局域网后<br />这里出现二维码</span>';
+      }
+    }
+  }
+}
+
+/** 复制文本：优先 Clipboard API，失败时退回隐藏 textarea + execCommand */
+async function copyText(text) {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* 继续降级 */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+function selectPhoneUrl() {
+  if (!E.phoneUrl) return;
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(E.phoneUrl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch { /* noop */ }
 }
 
 function bindPhone() {
@@ -1019,11 +1319,11 @@ function bindPhone() {
         toast('还没有地址', window.eyePilotDesktop ? '先点「开启局域网」' : '用 python serve.py --lan 启动', 'warn', 4200);
         return;
       }
-      try {
-        await navigator.clipboard.writeText(url);
+      if (await copyText(url)) {
         toast('已复制', '在手机浏览器粘贴打开即可', 'good', 2600);
-      } catch {
-        toast('复制失败', '手动选中上面的地址复制', 'warn', 3000);
+      } else {
+        selectPhoneUrl();
+        toast('复制被浏览器拦住了', '地址已选中：按 Ctrl+C 复制，或直接扫上面的二维码', 'warn', 5600);
       }
     });
   }
@@ -1655,6 +1955,11 @@ Object.assign(ui, {
   showSettingsPane,
   applyAppearance,
   syncIslandPreview,
+  resetLayout,
+  showLoading,
+  hideLoading,
+  armSlowHint,
+  disarmSlowHint,
   renderPluginManager,
   startAlign,
   toast,

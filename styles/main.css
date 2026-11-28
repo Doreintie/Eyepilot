@@ -96,6 +96,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
 .fine { color: var(--dim); font-size: 11.5px; line-height: 1.6; }
+.fine.warn-text { color: var(--warn); }
 .eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: .22em; color: var(--accent); text-transform: uppercase; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -126,7 +127,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
   z-index: 40;
 }
 
-.brand { display: flex; align-items: center; gap: 11px; min-width: 250px; }
+.brand { display: flex; align-items: center; gap: 11px; flex: none; min-width: 0; }
 .brand-mark {
   width: 38px; height: 38px; border-radius: 12px;
   display: grid; place-items: center;
@@ -286,12 +287,30 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 .eye-ui .rail-more-menu .rail-btn span { font-size: 10.5px; }
 @keyframes moreIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
 
+/* 拖动排序 */
+.card-head h3, .fv-card-h h3 { margin-right: auto; }
+.drag-handle {
+  flex: none; width: 18px; height: 18px; border-radius: 5px;
+  display: grid; place-items: center; color: var(--dim);
+  opacity: .6; cursor: grab; transition: opacity .15s, background .15s;
+}
+.drag-handle svg { width: 14px; height: 14px; fill: currentColor; stroke: none; }
+.drag-handle { touch-action: none; }
+body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none; }
+.drag-handle:hover { opacity: 1; background: var(--panel-2); }
+.drag-handle.floating { position: absolute; top: 8px; right: 8px; z-index: 4; background: color-mix(in srgb, var(--panel) 70%, transparent); }
+.card.dragging { opacity: .5; }
+.card.drop-before { box-shadow: 0 -2px 0 0 var(--accent), var(--shadow); }
+.card.drop-after { box-shadow: 0 2px 0 0 var(--accent), var(--shadow); }
+
 /* ===================== views ===================== */
 
 .views { overflow-y: auto; overflow-x: hidden; padding: 20px 24px 34px; }
 .view { display: none; max-width: 1560px; margin: 0 auto; }
-.view.active { display: block; animation: viewIn .42s var(--ease); }
+.view.active { display: block; animation: viewSwitch .34s var(--ease); }
 @keyframes viewIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+/* 切视图只做位移，不做透明度：否则卡片会先「透明」再变实，看起来像闪一下 */
+@keyframes viewSwitch { from { transform: translateY(8px); } to { transform: none; } }
 
 .view-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 16px; flex-wrap: wrap; }
 .head-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -488,7 +507,8 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 .tip-foot { margin-top: 9px; }
 
 /* break card */
-.break-card { display: flex; align-items: center; gap: 16px; }
+.break-card { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px 16px; }
+.break-card .card-head { grid-column: 1 / -1; margin-bottom: 0; }
 .break-ring { position: relative; width: 104px; height: 104px; flex: none; }
 .break-ring svg { width: 104px; height: 104px; transform: rotate(-90deg); }
 .break-ring circle { fill: none; stroke-width: 6; }
@@ -1075,6 +1095,30 @@ input[type="range"]::-webkit-slider-thumb {
   font-family: inherit;
 }
 .island-custom input:focus { outline: none; border-color: var(--accent); }
+.apx-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 6px; }
+.apx {
+  position: relative; height: 86px; border-radius: 12px; overflow: hidden;
+  border: 1px solid var(--line-2);
+  background: url("../assets/bg-iceland.jpg") center 40% / cover no-repeat;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 7px 9px; font-size: 10.5px; color: #fff;
+}
+.apx b, .apx small { position: relative; z-index: 2; text-shadow: 0 1px 3px rgba(0,0,0,.65); font-weight: 500; }
+.apx small { font-family: var(--mono); opacity: .9; }
+.apx::after { content: ""; position: absolute; inset: 0; background: var(--apx-veil, rgba(3,6,11,.45)); }
+.apx-menu { background: var(--panel-2); color: var(--text); }
+.apx-menu::after { display: none; }
+.apx-menu b, .apx-menu small { text-shadow: none; }
+.apx-menu-card {
+  position: absolute; left: 50%; top: 61%; transform: translate(-50%, -50%);
+  width: 72px; padding: 3px; border-radius: 8px; z-index: 2;
+  background: rgba(8, 15, 25, var(--menu-alpha, .92));
+  border: 1px solid var(--line-2); box-shadow: 0 8px 20px rgba(0,0,0,.35);
+}
+.apx-menu-card i { display: block; text-align: center; font-style: normal; font-size: 8px; line-height: 1.8; color: var(--text); }
+:root[data-theme="light"] .apx-menu-card { background: rgba(250, 252, 255, var(--menu-alpha, .92)); }
+@media (max-width: 760px) { .apx-row { grid-template-columns: minmax(0, 1fr); } }
+
 .island-guide {
   margin: 4px 0 14px; padding: 12px 14px 12px 30px;
   border-radius: 12px; border: 1px dashed var(--line-2);
@@ -1112,6 +1156,24 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--accent); white-space: nowrap;
 }
 .phone-link-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.phone-connect {
+  display: grid; grid-template-columns: 152px minmax(0, 1fr); gap: 14px;
+  margin: 14px 0 10px; padding: 12px; border-radius: 14px;
+  border: 1px solid var(--line); background: var(--panel-2);
+}
+.phone-qr {
+  width: 152px; height: 152px; border-radius: 12px; overflow: hidden;
+  display: grid; place-items: center; background: rgba(255, 255, 255, .06);
+  border: 1px dashed var(--line-2); flex: none;
+}
+.phone-qr.ready { border-style: solid; background: #fff; padding: 2px; }
+.phone-qr canvas { width: 148px; height: 148px; display: block; }
+.phone-qr-empty { font-size: 10.5px; color: var(--dim); text-align: center; line-height: 1.7; }
+.phone-steps b { font-size: 12.5px; }
+.phone-steps ol { margin: 7px 0 0; padding-left: 18px; font-size: 11.5px; color: var(--muted); line-height: 1.8; }
+.phone-steps li::marker { color: var(--accent); font-family: var(--mono); }
+.phone-steps li b { font-size: 11.5px; color: var(--text); }
+@media (max-width: 760px) { .phone-connect { grid-template-columns: minmax(0, 1fr); } .phone-qr { margin: 0 auto; } }
 .pill.tiny.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 @media (max-width: 980px) { .phone-card { grid-column: auto; } }
 @media (max-width: 980px) { .island-card { grid-column: auto; } }
@@ -1364,7 +1426,58 @@ input[type="range"]::-webkit-slider-thumb {
 .mouse-hold #eyeCursor, .mouse-hold #dwellRing { opacity: .22 !important; }
 .mouse-hold #eyeCursor { transition: opacity .2s; }
 
+/* ===================== v1.9.0：气泡式教程 ===================== */
+
+.tour-layer { position: fixed; inset: 0; z-index: 9750; pointer-events: none; }
+.tour-layer[hidden] { display: none; }
+.tour-spot {
+  position: fixed; left: 0; top: 0; width: 0; height: 0; border-radius: 14px;
+  pointer-events: none; opacity: 0; transition: opacity .18s, left .24s var(--ease), top .24s var(--ease), width .24s var(--ease), height .24s var(--ease);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 0 0 9999px rgba(3, 6, 11, .74);
+}
+.tour-bubble {
+  position: fixed; width: min(324px, 88vw); padding: 15px 17px 13px;
+  background: var(--veil-solid); border: 1px solid var(--line-2); border-radius: 14px;
+  box-shadow: 0 30px 70px -30px #000, inset 0 1px 0 rgba(255, 255, 255, .18);
+  pointer-events: auto; animation: gateIn .22s var(--ease);
+}
+.tour-bubble h2 { font-size: 16px; margin: 5px 0 6px; letter-spacing: -.01em; }
+.tour-bubble .gate-lead { font-size: 12px; margin-bottom: 10px; line-height: 1.75; }
+.tour-bubble .gate-actions .btn { height: 34px; font-size: 12px; }
+.tour-bubble .tour-dots { margin: 10px 0 12px; }
+.tour-arrow {
+  position: absolute; width: 14px; height: 14px; background: var(--veil-solid);
+  border: 1px solid var(--line-2); transform: rotate(45deg); border-radius: 2px;
+}
+.tour-arrow.top { border-right: 0; border-bottom: 0; }
+.tour-arrow.bottom { border-left: 0; border-top: 0; }
+.tour-arrow.left { border-right: 0; border-top: 0; }
+.tour-arrow.right { border-left: 0; border-bottom: 0; }
+:root[data-theme="light"] .tour-spot { box-shadow: 0 0 0 9999px rgba(245, 249, 253, .78); }
+
 /* ===================== v1.6.0：须知 / 授权 / 教程 ===================== */
+
+.loading-gate {
+  position: fixed; inset: 0; z-index: 9900; display: grid; place-items: center;
+  background: rgba(3, 6, 11, .55); backdrop-filter: blur(8px);
+  animation: viewIn .18s var(--ease);
+}
+.loading-gate[hidden] { display: none; }
+.loading-box {
+  min-width: 260px; padding: 20px 24px; border-radius: 16px; text-align: center;
+  background: var(--panel); border: 1px solid var(--line-2);
+  box-shadow: 0 30px 70px -30px #000;
+  display: flex; flex-direction: column; align-items: center; gap: 9px;
+}
+.loading-box b { font-size: 14px; font-weight: 550; letter-spacing: .2px; }
+.loading-box small { font-size: 11.5px; color: var(--muted); }
+.loading-spin {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2.5px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-top-color: var(--accent); animation: spin .9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .gate {
   position: fixed; inset: 0; z-index: 9800; display: none;
@@ -1380,8 +1493,9 @@ input[type="range"]::-webkit-slider-thumb {
   padding: 26px 26px 20px;
   background: var(--panel); border: 1px solid var(--line-2);
   border-radius: 16px; box-shadow: 0 40px 90px -40px #000;
-  animation: modalIn .3s var(--ease);
+  animation: gateIn .28s var(--ease);
 }
+@keyframes gateIn { from { opacity: 0; transform: scale(.965); } to { opacity: 1; transform: none; } }
 .gate-card h2 { font-size: 21px; margin: 8px 0 10px; letter-spacing: -.02em; }
 .gate-lead { font-size: 12.5px; color: var(--muted); line-height: 1.75; margin: 0 0 12px; }
 .gate-list { margin: 0 0 16px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
@@ -1445,7 +1559,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .set-body { min-width: 0; }
 .set-pane { display: none; flex-direction: column; gap: 14px; }
-.set-pane.on { display: flex; animation: viewIn .28s var(--ease); }
+.set-pane.on { display: flex; animation: viewSwitch .24s var(--ease); }
 #setSource, #setSource[hidden] { display: none !important; }
 
 /* 窄窗口：类目变横向滚动条 */

@@ -57,6 +57,9 @@ export const DEFAULT_SETTINGS = {
   themeMode: 'dark',      // dark | light | system
   bgImage: '',            // 自定义背景（dataURL，仅本地）
   bgDim: 45,
+  cardAlpha: 58,          // 玻璃卡片空白处的底色不透明度（%）
+  closeToTray: true,      // 关窗口后继续在托盘运行（桌面版）
+  layout: {},             // 各视图卡片的拖动顺序
   moreOpacity: 92,        // 左下角「更多」展开菜单的底色不透明度（%）
   llm: { base: '', key: '', model: '' },
 };
@@ -92,6 +95,7 @@ export function mergeSettings(raw) {
   const isl = { ...DEFAULT_SETTINGS.island, ...((raw && raw.island) || {}) };
   isl.items = { ...DEFAULT_SETTINGS.island.items, ...((raw && raw.island && raw.island.items) || {}) };
   s.island = isl;
+  s.layout = { ...(DEFAULT_SETTINGS.layout || {}), ...((raw && raw.layout) || {}) };
   return s;
 }
 

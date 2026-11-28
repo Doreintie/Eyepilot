@@ -43,7 +43,7 @@ export function initFocusSession() {
           <button class="on" data-scene="paper" data-gaze>纸质学习</button>
           <button data-scene="screen" data-gaze>电脑学习</button>
         </div>
-        <span class="fv-chip" data-live><i class="fv-dot"></i><span>等待眼控信号</span></span>
+        <span class="fv-chip" data-live><i class="fv-dot"></i><span data-live-tx>摄像头未启动</span></span>
       </div>
 
       <div class="fv-main">
@@ -97,16 +97,6 @@ export function initFocusSession() {
               <div><span data-pause-label>离座</span><b><span data-pause>0</span><u>次</u></b></div>
             </div>
           </section>
-
-          <section class="fv-glass fv-pad fv-signals-card">
-            <div class="fv-card-h"><h3>传感信号</h3><span class="fv-tag" data-scene-tag>场景 A · 眼神不参与判定</span></div>
-            <div class="fv-signals" data-signals></div>
-          </section>
-
-          <section class="fv-glass fv-pad fv-insight">
-            <div class="fv-card-h"><h3>一句结论</h3><span class="fv-tag" data-insight-src>等待数据</span></div>
-            <p data-insight>开始会话后，这里会按真实信号给出归因，不会预置演示结论。</p>
-          </section>
         </aside>
       </div>
 
@@ -123,10 +113,27 @@ export function initFocusSession() {
         <div class="fv-tl-foot"><span>− 5:00</span><span>现在</span></div>
       </section>
 
-      <div class="fv-foot">
-        <span>信号在本地浏览器计算，不上传。纸质场景无法识别手部书写，仅按在座 / 生理信号估算。</span>
-        <button class="fv-btn line" data-export data-gaze>导出会话报告</button>
-      </div>
+      <details class="fv-glass fv-more" data-more>
+        <summary>
+          <b>更多数据</b>
+          <span>传感信号 · 一句结论 · 导出报告</span>
+          <i class="fv-more-chev" aria-hidden="true"></i>
+        </summary>
+        <div class="fv-more-grid">
+          <section class="fv-pad fv-signals-card">
+            <div class="fv-card-h"><h3>传感信号</h3><span class="fv-tag" data-scene-tag>场景 A · 眼神不参与判定</span></div>
+            <div class="fv-signals" data-signals></div>
+          </section>
+          <section class="fv-pad fv-insight">
+            <div class="fv-card-h"><h3>一句结论</h3><span class="fv-tag" data-insight-src>等待数据</span></div>
+            <p data-insight>开始会话后，这里会按真实信号给出归因，不会预置演示结论。</p>
+          </section>
+        </div>
+        <div class="fv-foot">
+          <span>信号在本地浏览器计算，不上传。纸质场景无法识别手部书写，仅按在座 / 生理信号估算。</span>
+          <button class="fv-btn line" data-export data-gaze>导出会话报告</button>
+        </div>
+      </details>
     </div>`;
 
   const $ = (sel) => root.querySelector(sel);
@@ -141,6 +148,8 @@ export function initFocusSession() {
   const exportBtn = $('[data-export]');
   const subEl = $('[data-sub]');
   const liveEl = $('[data-live]');
+  const liveTx = $('[data-live-tx]');
+  const livePill = document.getElementById('focusLivePill');
   const scoreEl = $('[data-score]');
   const levelTx = $('[data-level-tx]');
   const levelTip = $('[data-level-tip]');
@@ -190,7 +199,15 @@ export function initFocusSession() {
   let previewStream = null;
 
   const note = (text) => { noteEl.textContent = text; };
-  const setLive = (text) => { liveEl.textContent = text; };
+  const setLive = (text) => {
+    if (liveTx) liveTx.textContent = text;
+    else liveEl.textContent = text;
+  };
+  const setPill = (text, state) => {
+    if (!livePill) return;
+    livePill.className = `pill tiny${state ? ` ${state}` : ''}`;
+    livePill.innerHTML = `<i class="dot"></i>${text}`;
+  };
 
   const paint = () => {
     const lv = level(S.score);
@@ -284,8 +301,27 @@ export function initFocusSession() {
         <div class="fv-sig-v">${r.val}</div>
       </div>`).join('');
 
-    if (!S.running) {
-      setLive(frame && frame.present ? '真实信号 · 已就绪' : '等待眼控信号');
+    if (S.running) {
+      setLive('专注计时中');
+      setPill('正在记录', 'on');
+    } else if (S.finished) {
+      setLive('本轮完成');
+      setPill('本轮完成', 'on');
+    } else if (S.remain < TOTAL) {
+      setLive('已暂停');
+      setPill('已暂停', 'warn');
+    } else {
+      const present = !!(frame && frame.present);
+      if (present) {
+        setLive('摄像头已就绪');
+        setPill('摄像头已就绪', 'on');
+      } else if (frame) {
+        setLive('等待人脸入镜');
+        setPill('等待人脸入镜', 'warn');
+      } else {
+        setLive('摄像头未启动');
+        setPill('摄像头未启动', '');
+      }
     }
   };
 

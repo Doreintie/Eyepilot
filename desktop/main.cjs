@@ -21,6 +21,7 @@ let tray = null;
 let server = null;
 let port = 0;
 let quitFlag = false;
+let closeToTray = true;
 let lastMetrics = null;
 let trayHinted = false;
 
@@ -268,15 +269,42 @@ function serveFile(req, res) {
   }
 }
 
-function startServer() {
-  return new Promise((resolve, reject) => {
-    server = http.createServer(serveFile);
-    server.on('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address();
-      resolve(addr.port);
-    });
-  });
+function portFile() {
+  return path.join(app.getPath('userData'), 'app-port.json');
+}
+
+function savedPort() {
+  try {
+    const p = JSON.parse(fs.readFileSync(portFile(), 'utf8')).port;
+    return Number.isInteger(p) && p > 0 ? p : 0;
+  } catch { return 0; }
+}
+
+/**
+ * 主窗口用「固定端口」而不是 listen(0)：
+ * localStorage 按 origin（含端口）隔离，端口每次随机的话，
+ * 背景图、卡片顺序、校准结果在重启后全都会“丢”。
+ * 优先复用上次成功的端口，被占用时按顺序换一个并记住。
+ */
+async function startServer() {
+  const preferred = savedPort();
+  const candidates = [];
+  if (preferred) candidates.push(preferred);
+  for (let p = 8838; p <= 8856; p++) if (p !== preferred) candidates.push(p);
+  let lastErr = null;
+  for (const p of candidates) {
+    const srv = http.createServer(serveFile);
+    try {
+      await listenOn(srv, p, '127.0.0.1');
+      server = srv;
+      try { fs.writeFileSync(portFile(), JSON.stringify({ port: p })); } catch { /* noop */ }
+      return p;
+    } catch (err) {
+      lastErr = err;
+      try { srv.close(); } catch { /* noop */ }
+    }
+  }
+  throw lastErr || new Error('没有可用端口');
 }
 
 /* ---------------- 手机互联：按需在 0.0.0.0 上开一个监听 ---------------- */
@@ -286,7 +314,15 @@ function ensureCert() {
   const dir = path.join(app.getPath('userData'), 'certs');
   const crt = path.join(dir, 'lan-dev.crt');
   const key = path.join(dir, 'lan-dev.key');
-  if (fs.existsSync(crt) && fs.existsSync(key)) return { crt, key };
+  const stamp = path.join(dir, 'lan-dev.ip');
+  const ip = lanAddress();
+  if (fs.existsSync(crt) && fs.existsSync(key) && fs.existsSync(stamp)) {
+    try {
+      if (fs.readFileSync(stamp, 'utf8').trim() === ip) return { crt, key };
+    } catch { /* 读不到就重签 */ }
+  }
+  // IP 变了旧证书的 SAN 就对不上，手机端会一直报“网站不安全”
+  for (const f of [crt, key]) { try { fs.unlinkSync(f); } catch { /* noop */ } }
   // 手机浏览器只在安全上下文里给摄像头，所以这里也要 HTTPS。
   // Electron 进程不一定继承了 Git 的 PATH，逐个试常见位置。
   const candidates = [
@@ -299,25 +335,26 @@ function ensureCert() {
     'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
     '-keyout', key, '-out', crt, '-days', '825',
     '-subj', '/CN=EyePilot LAN',
-    '-addext', `subjectAltName=IP:${lanAddress()},IP:127.0.0.1,DNS:localhost`,
+    '-addext', `subjectAltName=IP:${ip},IP:127.0.0.1,DNS:localhost`,
   ];
   for (const bin of candidates) {
     try {
       fs.mkdirSync(dir, { recursive: true });
       execFileSync(bin, args, { stdio: 'ignore' });
+      try { fs.writeFileSync(stamp, ip); } catch { /* noop */ }
       return { crt, key };
     } catch { /* 试下一个 */ }
   }
   return null;
 }
 
-function listenOn(srv, port) {
+function listenOn(srv, port, host = '0.0.0.0') {
   return new Promise((resolve, reject) => {
     const onErr = (e) => { srv.off('listening', onOk); reject(e); };
     const onOk = () => { srv.off('error', onErr); resolve(); };
     srv.once('error', onErr);
     srv.once('listening', onOk);
-    srv.listen(port, '0.0.0.0');
+    srv.listen(port, host);
   });
 }
 
@@ -399,9 +436,14 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // 关窗口不退出：收到托盘里继续记录，托盘里再点“退出”
+  // 关窗口的行为由「设置 → 通用」决定：默认收进托盘，也可以关掉直接退出
   mainWindow.on('close', (e) => {
     if (quitFlag) return;
+    if (!closeToTray) {
+      quitFlag = true;
+      app.quit();
+      return;
+    }
     e.preventDefault();
     mainWindow.hide();
     if (!trayHinted && tray) {
@@ -618,10 +660,12 @@ function createTray() {
 /* ---------------- 生命周期 ---------------- */
 
 async function boot() {
+  // 摄像头 + 剪贴板：手机地址的“复制”走 Clipboard API，默认会被这里拦掉
+  const allowPermission = (p) => p === 'media' || p === 'clipboard-sanitized-write' || p === 'clipboard-read';
   session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
-    callback(permission === 'media');
+    callback(allowPermission(permission));
   });
-  session.defaultSession.setPermissionCheckHandler((wc, permission) => permission === 'media');
+  session.defaultSession.setPermissionCheckHandler((wc, permission) => allowPermission(permission));
 
   port = await startServer();
   createWindow();
@@ -643,6 +687,7 @@ ipcMain.on('island:action', (_e, name) => sendAction(name));
 ipcMain.on('island:toggle', () => toggleIsland());
 ipcMain.on('island:visibility', (_e, v) => setIslandVisible(!!v));
 ipcMain.on('app:quit', () => { quitFlag = true; app.quit(); });
+ipcMain.on('app:close-behavior', (_e, v) => { closeToTray = !!v; });
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

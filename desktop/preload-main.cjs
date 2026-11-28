@@ -25,5 +25,9 @@ contextBridge.exposeInMainWorld('eyePilotDesktop', {
     disable: () => ipcRenderer.invoke('link:disable'),
     status: () => ipcRenderer.invoke('link:status'),
   },
+  app: {
+    // 关窗口是收进托盘还是直接退出（设置 → 通用）
+    setCloseBehavior: (tray) => ipcRenderer.send('app:close-behavior', !!tray),
+  },
   quit: () => ipcRenderer.send('app:quit'),
 });

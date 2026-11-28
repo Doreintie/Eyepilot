@@ -75,13 +75,30 @@ def lan_ip():
 
 
 def ensure_cert():
-    """用 openssl 生成自签证书（只在 --lan 时需要）。失败返回 None。"""
+    """用 openssl 生成自签证书（只在 --lan 时需要）。失败返回 None。
+
+    证书的 SAN 里写死了当时的局域网 IP。换网络后 IP 变了，旧证书就会
+    「名称不匹配」，手机浏览器报“网站不安全”并可能拦掉摄像头——
+    所以这里按 IP 记一个标记文件，IP 变了就重签。
+    """
     crt = os.path.join(CERT_DIR, "lan-dev.crt")
     key = os.path.join(CERT_DIR, "lan-dev.key")
-    if os.path.exists(crt) and os.path.exists(key):
-        return crt, key
+    stamp = os.path.join(CERT_DIR, "lan-dev.ip")
+    ip = lan_ip()
+    if os.path.exists(crt) and os.path.exists(key) and os.path.exists(stamp):
+        try:
+            with open(stamp, "r", encoding="utf-8") as f:
+                if f.read().strip() == ip:
+                    return crt, key
+        except OSError:
+            pass
     os.makedirs(CERT_DIR, exist_ok=True)
-    san = f"IP:{lan_ip()},IP:127.0.0.1,DNS:localhost"
+    for old in (crt, key):
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+    san = f"IP:{ip},IP:127.0.0.1,DNS:localhost"
     cmd = [
         "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
         "-keyout", key, "-out", crt, "-days", "825",
@@ -98,6 +115,8 @@ def ensure_cert():
     for bin_path in candidates:
         try:
             subprocess.run([bin_path] + cmd[1:], check=True, capture_output=True)
+            with open(stamp, "w", encoding="utf-8") as f:
+                f.write(ip)
             return crt, key
         except (OSError, subprocess.CalledProcessError) as err:
             last = err
