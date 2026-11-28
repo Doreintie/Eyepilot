@@ -23,7 +23,6 @@
       <div class="brand-text">
         <strong>EyePilot</strong><span>瞳行</span>
       </div>
-      <span class="brand-tag">AI × 眼动交互</span>
     </div>
 
     <div class="status-strip" id="statusStrip">
@@ -74,6 +73,10 @@
       </button>
     </nav>
     <div class="rail-foot">
+      <button class="rail-btn rail-help-btn" id="btnHelp" data-gaze aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.1a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.5"/><circle cx="12" cy="17.2" r="1.05"/></svg>
+        <span>帮助</span>
+      </button>
       <div class="rail-more" id="railMore">
         <div class="rail-more-menu" id="railMoreMenu" hidden>
           <button class="rail-btn" data-view="plugins" data-gaze>
@@ -90,7 +93,7 @@
           </button>
         </div>
         <button class="rail-btn rail-more-toggle" id="btnRailMore" data-gaze aria-expanded="false" aria-haspopup="true">
-          <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="1.7"/><circle cx="12" cy="6" r="1.7"/><circle cx="18" cy="6" r="1.7"/><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/><circle cx="6" cy="18" r="1.7"/><circle cx="12" cy="18" r="1.7"/><circle cx="18" cy="18" r="1.7"/></svg>
+          <svg viewBox="0 0 24 24"><circle cx="5.4" cy="5.4" r="2.2"/><circle cx="12" cy="5.4" r="2.2"/><circle cx="18.6" cy="5.4" r="2.2"/><circle cx="5.4" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="18.6" cy="12" r="2.2"/><circle cx="5.4" cy="18.6" r="2.2"/><circle cx="12" cy="18.6" r="2.2"/><circle cx="18.6" cy="18.6" r="2.2"/></svg>
           <span>更多</span>
         </button>
       </div>
@@ -106,7 +109,12 @@
           <h1>专注会话</h1>
           <p class="sub">25 分钟双场景专注计时；纸质看在座与生理信号，电脑看视线与凝视。</p>
         </div>
-        <span class="pill tiny">真实眼控驱动</span>
+        <div class="head-tools">
+          <button class="icon-btn" data-help="focus" data-gaze title="专注分怎么算" aria-label="专注分怎么算">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.1a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.5"/><circle cx="12" cy="17.2" r="1.05"/></svg>
+          </button>
+          <span class="pill tiny">真实眼控驱动</span>
+        </div>
       </div>
       <div class="focus-view" id="focusSessionRoot"></div>
     </section>
@@ -454,6 +462,25 @@
 
       <div class="plugin-grid" id="pluginGrid"></div>
 
+      <div class="card">
+        <div class="card-head"><h3>安装插件</h3><span class="pill tiny">拖入即装</span></div>
+        <div class="dropzone" id="pluginDrop">
+          <b>把 .zip 或 .js 拖到这里</b><br />
+          也可以 <button class="btn link sm" id="pluginPick" type="button">选择文件</button>
+          <input type="file" id="pluginFile" accept=".js,.zip" multiple hidden />
+        </div>
+        <p class="fine" id="pluginInstallMsg">插件在本机运行：能读视线与健康指标，读不到摄像头画面。只装你信任的来源。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>插件管理</h3><span class="pill tiny" id="pluginManageCount">0 个</span></div>
+        <div class="plugin-manager" id="pluginManager"></div>
+        <div class="row-between" style="margin-top:10px">
+          <span class="fine">内置插件不可卸载；卸载后插件数据会一并删除。</span>
+          <button class="btn ghost sm" id="btnPluginRemove" disabled>批量卸载</button>
+        </div>
+      </div>
+
       <div class="card sdk-card">
         <div class="card-head"><h3>插件 API · 十行接入</h3><span class="pill tiny">JS / 浏览器</span></div>
         <pre class="code"><code>EyePilot.register({
@@ -485,7 +512,11 @@
         <div><h1>设置</h1><p class="sub">校准、点击方式、提醒阈值与数据管理。</p></div>
       </div>
 
-      <div class="settings-grid">
+      <div class="settings-shell">
+        <aside class="set-nav" id="setNav"></aside>
+        <div class="set-body" id="setBody"></div>
+
+      <div class="settings-grid" id="setSource" hidden>
         <div class="card">
           <div class="card-head"><h3>眼控</h3></div>
           <div class="form-grid">
@@ -655,6 +686,26 @@
         </div>
 
         <div class="card">
+          <div class="card-head"><h3>外观</h3><span class="pill tiny">界面</span></div>
+          <p class="body-text">主题跟随系统时会自动切换；自定义背景只在本地保存，不会上传。</p>
+          <div class="mode-switch mode-switch-3">
+            <button class="mode-btn" data-theme-mode="dark" data-gaze>深色</button>
+            <button class="mode-btn" data-theme-mode="light" data-gaze>浅色</button>
+            <button class="mode-btn" data-theme-mode="system" data-gaze>跟随系统</button>
+          </div>
+          <div class="row-between" style="margin-top:12px">
+            <span class="fine">自定义背景</span>
+            <span>
+              <input type="file" id="bgUpload" accept="image/*" hidden />
+              <button class="btn ghost sm" id="btnBgPick">选择图片</button>
+              <button class="btn ghost sm" id="btnBgClear">清除</button>
+            </span>
+          </div>
+          <label class="range-row" style="margin-top:10px"><span>背景遮罩</span><input type="range" id="setBgDim" min="0" max="85" step="5" value="45" /><b id="bgDimHint">45%</b></label>
+          <p class="fine" id="bgHint">没有自定义背景，使用主题默认底纹。</p>
+        </div>
+
+        <div class="card">
           <div class="card-head"><h3>数据与隐私</h3></div>
           <p class="body-text">所有视频帧都在浏览器本地处理，<b>没有任何画面离开这台设备</b>。只有匿名化的指标会被写入本地存储，用于生成个人基线与趋势。</p>
           <div class="row-between">
@@ -673,10 +724,12 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.6.1</span></div>
+          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.7.0</span></div>
           <p class="body-text">EyePilot · 瞳行，校园黑客松参赛作品。技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移特征 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件，普通笔记本摄像头即可运行。</p>
           <p class="fine">本作品不构成医疗建议。若持续眼干、眼痛或视力模糊，请就医。</p>
         </div>
+      </div>
+          </div>
       </div>
     </section>
   </main>

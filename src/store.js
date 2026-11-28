@@ -54,6 +54,9 @@ export const DEFAULT_SETTINGS = {
   fatigueThreshold: 65,
   breakMinutes: 20,
   theme: 'dark',
+  themeMode: 'dark',      // dark | light | system
+  bgImage: '',            // 自定义背景（dataURL，仅本地）
+  bgDim: 45,
   llm: { base: '', key: '', model: '' },
 };
 

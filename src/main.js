@@ -13,6 +13,7 @@ import { GazeTracker, Calibrator } from './gaze.js';
 import { PhoneLink } from './net/phone-link.js';
 import { fuseTwo } from './core/fusion.js';
 import { createGazeInput } from './input.js';
+import { installFromFiles, listInstalled, removeMany, loadInstalled } from './plugin-store.js';
 import { HealthMonitor } from './health-monitor.js';
 import { AICoach, buildReport, assessLocal } from './ai.js';
 import { pluginHost, renderPluginGrid, closePanel, openPlugin } from './plugins.js';
@@ -592,6 +593,46 @@ const actions = {
     }
     refreshPhoneUi();
     return r;
+  },
+  setThemeMode: (m) => {
+    const mode = ['light', 'system', 'dark'].includes(m) ? m : 'dark';
+    saveSettings({ themeMode: mode });
+    ui.applyAppearance();
+  },
+  setBgImage: (dataUrl) => {
+    try {
+      saveSettings({ bgImage: dataUrl || '' });
+    } catch {
+      ui.toast('背景图太大', '换一张分辨率低一点的图片，或先压缩', 'warn', 4200);
+      return;
+    }
+    ui.applyAppearance();
+  },
+  setBgDim: (v) => {
+    saveSettings({ bgDim: Math.max(0, Math.min(85, Number(v) || 0)) });
+    ui.applyAppearance();
+  },
+  installPlugins: async (files) => {
+    const r = await installFromFiles(files);
+    if (r.added.length) {
+      await loadInstalled();
+      ui.renderPluginManager([]);
+  // 先加载本地安装的第三方插件，再渲染列表，避免刷新后卡片消失
+  loadInstalled()
+    .then(async (n) => {
+      if (n) renderPluginGrid(document.getElementById('pluginGrid'));
+      ui.renderPluginManager(await listInstalled());
+    })
+    .catch(() => ui.renderPluginManager([]));
+      ui.renderPluginManager(await listInstalled());
+    }
+    return r;
+  },
+  removePlugins: async (ids) => {
+    if (!ids || !ids.length) return;
+    await removeMany(ids);
+    ui.renderPluginManager(await listInstalled());
+    ui.toast('已卸载', `移除了 ${ids.length} 个插件，刷新页面后卡片会消失`, 'good', 4000);
   },
   openTour: () => openTour(),
   /** 直接跳到「手机双摄」卡片：没有可用摄像头的人不该先学会找设置 */

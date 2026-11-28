@@ -3,6 +3,7 @@
    ============================================================ */
 
 import { $, $$, el, toast, beep, fmtClock, fmtHM, download, storage, escapeHtml } from './utils.js';
+import { initHelp, openHelp } from './help.js';
 import { app, saveSettings } from './store.js';
 import { pluginHost } from './plugins.js';
 import { lineChart, drawHeatmap } from './charts.js';
@@ -41,6 +42,10 @@ const ids = [
   'headHHint', 'headVHint', 'headDeadHint', 'hybridHint', 'hybridRow', 'modeHint',
   'btnRecenter', 'setSystemCursor', 'setHeadOnly',
   'btnReplayTour', 'btnRevokeCam', 'camConsentState',
+  'setNav', 'setBody', 'setSource', 'btnHelp',
+  'bgUpload', 'btnBgPick', 'btnBgClear', 'setBgDim', 'bgDimHint', 'bgHint',
+  'pluginDrop', 'pluginPick', 'pluginFile', 'pluginManager', 'pluginManageCount',
+  'btnPluginRemove', 'pluginInstallMsg',
   'phonePill', 'phoneUrl', 'phoneDetail', 'phoneWeightHint', 'setPhoneWeight',
   'btnPhoneLan', 'btnPhoneCopy', 'btnPhoneAlign', 'btnPhoneReset',
   'setIsland', 'isBlink', 'isSession', 'isFatigue', 'isHealth', 'isBreak',
@@ -66,6 +71,12 @@ export const ui = {
     bindTopbar();
     bindOnboard();
     bindSettings();
+    buildSettingsShell();
+    bindAppearance();
+    bindHelp();
+    bindPluginsUI();
+    initHelp();
+    applyAppearance();
     bindPhone();
     bindCare();
     bindAlign();
@@ -671,6 +682,200 @@ function bindCare() {
   if (E.btnCareNext) E.btnCareNext.addEventListener('click', () => goCare(1));
 }
 
+
+
+/* ---------------- 设置：左类目 + 右内容 ---------------- */
+
+const SET_PANES = [
+  { key: 'health', label: '健康提醒', icon: '<svg viewBox="0 0 24 24"><path d="M3 12.5h4l2.2-5.5 3.2 11 2.6-7 1.8 3.5H21"/></svg>' },
+  { key: 'eye', label: '眼控', icon: '<svg viewBox="0 0 24 24"><path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12Z"/><circle cx="12" cy="12" r="3"/></svg>' },
+  { key: 'look', label: '外观', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17"/></svg>' },
+  { key: 'privacy', label: '数据隐私', icon: '<svg viewBox="0 0 24 24"><rect x="4.5" y="10" width="15" height="10" rx="2.4"/><path d="M8 10V7.6a4 4 0 0 1 8 0V10"/></svg>' },
+  { key: 'about', label: '关于', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.8" r="1.05"/></svg>' },
+];
+
+const CARD_PANE = {
+  健康提醒: 'health',
+  眼控: 'eye',
+  输入方式: 'eye',
+  视线微调: 'eye',
+  使用中自校准: 'eye',
+  手机双摄: 'eye',
+  灵动岛: 'look',
+  外观: 'look',
+  数据与隐私: 'privacy',
+  关于: 'about',
+};
+
+let setPaneKey = 'health';
+
+export function showSettingsPane(key) {
+  setPaneKey = key || 'health';
+  $$('.set-tab').forEach((b) => b.classList.toggle('on', b.dataset.pane === setPaneKey));
+  $$('.set-pane').forEach((p) => p.classList.toggle('on', p.dataset.pane === setPaneKey));
+}
+
+function buildSettingsShell() {
+  const nav = E.setNav;
+  const body = E.setBody;
+  const src = E.setSource;
+  if (!nav || !body || !src) return;
+  nav.innerHTML = SET_PANES.map((p) => `<button class="set-tab" data-pane="${p.key}" data-gaze>${p.icon}<span>${p.label}</span></button>`).join('');
+  body.innerHTML = SET_PANES.map((p) => `<div class="set-pane" data-pane="${p.key}"></div>`).join('');
+  src.querySelectorAll(':scope > .card').forEach((card) => {
+    const h = card.querySelector('.card-head h3');
+    const key = CARD_PANE[(h && h.textContent || '').trim()] || 'about';
+    const pane = body.querySelector(`.set-pane[data-pane="${key}"]`);
+    if (pane) pane.appendChild(card);
+  });
+  nav.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.set-tab');
+    if (btn) showSettingsPane(btn.dataset.pane);
+  });
+  showSettingsPane(setPaneKey);
+}
+
+/* ---------------- 外观：主题与背景 ---------------- */
+
+const themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+
+export function applyAppearance() {
+  const mode = app.settings.themeMode || 'dark';
+  const theme = mode === 'system' ? (themeMedia.matches ? 'dark' : 'light') : (mode === 'light' ? 'light' : 'dark');
+  document.documentElement.dataset.theme = theme;
+
+  const el = document.getElementById('app');
+  if (el) {
+    const img = app.settings.bgImage;
+    if (img) {
+      const dim = (app.settings.bgDim == null ? 45 : app.settings.bgDim) / 100;
+      el.style.backgroundImage = `linear-gradient(rgba(3,6,11,${dim}), rgba(3,6,11,${dim})), url("${img}")`;
+      el.style.backgroundSize = 'cover';
+      el.style.backgroundPosition = 'center';
+      el.style.backgroundAttachment = 'fixed';
+    } else {
+      el.style.backgroundImage = '';
+      el.style.backgroundSize = '';
+      el.style.backgroundPosition = '';
+      el.style.backgroundAttachment = '';
+    }
+  }
+
+  $$('.mode-btn[data-theme-mode]').forEach((b) => b.classList.toggle('on', b.dataset.themeMode === mode));
+  if (E.bgDimHint) E.bgDimHint.textContent = `${app.settings.bgDim == null ? 45 : app.settings.bgDim}%`;
+  if (E.setBgDim) E.setBgDim.value = String(app.settings.bgDim == null ? 45 : app.settings.bgDim);
+  if (E.bgHint) E.bgHint.textContent = app.settings.bgImage ? '已使用自定义背景（仅存本机）。' : '没有自定义背景，使用主题默认底纹。';
+}
+
+themeMedia.addEventListener('change', () => {
+  if ((app.settings.themeMode || 'dark') === 'system') applyAppearance();
+});
+
+function bindAppearance() {
+  $$('.mode-btn[data-theme-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      actions.setThemeMode && actions.setThemeMode(btn.dataset.themeMode);
+    });
+  });
+  if (E.btnBgPick && E.bgUpload) {
+    E.btnBgPick.addEventListener('click', () => E.bgUpload.click());
+    E.bgUpload.addEventListener('change', () => {
+      const f = E.bgUpload.files && E.bgUpload.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          // 压到 1920 宽再存，避免 localStorage 撑爆
+          const max = 1920;
+          const scale = Math.min(1, max / (img.width || max));
+          const c = document.createElement('canvas');
+          c.width = Math.round((img.width || max) * scale);
+          c.height = Math.round((img.height || max) * scale);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          actions.setBgImage && actions.setBgImage(c.toDataURL('image/jpeg', 0.82));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(f);
+    });
+  }
+  if (E.btnBgClear) {
+    E.btnBgClear.addEventListener('click', () => actions.setBgImage && actions.setBgImage(''));
+  }
+  if (E.setBgDim) {
+    E.setBgDim.addEventListener('input', () => { if (E.bgDimHint) E.bgDimHint.textContent = `${E.setBgDim.value}%`; });
+    E.setBgDim.addEventListener('change', () => actions.setBgDim && actions.setBgDim(Number(E.setBgDim.value)));
+  }
+}
+
+/* ---------------- 帮助 ---------------- */
+
+function bindHelp() {
+  if (E.btnHelp) E.btnHelp.addEventListener('click', () => openHelp());
+  document.body.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-help]');
+    if (b) openHelp(b.dataset.help);
+  });
+}
+
+/* ---------------- 插件安装与批量卸载 ---------------- */
+
+function bindPluginsUI() {
+  const drop = E.pluginDrop;
+  const pick = E.pluginPick;
+  const input = E.pluginFile;
+  if (!drop || !input) return;
+
+  const send = async (files) => {
+    if (!files || !files.length) return;
+    if (E.pluginInstallMsg) E.pluginInstallMsg.textContent = '正在安装…';
+    const r = await (actions.installPlugins && actions.installPlugins(files));
+    if (E.pluginInstallMsg) {
+      if (r && r.errors && r.errors.length) E.pluginInstallMsg.textContent = `安装失败：${r.errors.join('；')}`;
+      else if (r && r.added && r.added.length) E.pluginInstallMsg.textContent = `已安装 ${r.added.map((p) => p.name).join('、')}，刷新后可在插件列表看到。`;
+      else E.pluginInstallMsg.textContent = '没有可安装的插件。';
+    }
+    input.value = '';
+  };
+
+  ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (ev) => { ev.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (ev) => { ev.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', (ev) => send(ev.dataTransfer && ev.dataTransfer.files));
+  drop.addEventListener('click', () => input.click());
+  if (pick) pick.addEventListener('click', (ev) => { ev.stopPropagation(); input.click(); });
+  input.addEventListener('change', () => send(input.files));
+
+  if (E.btnPluginRemove) {
+    E.btnPluginRemove.addEventListener('click', async () => {
+      const ids = $$('#pluginManager input[type="checkbox"]:checked').map((c) => c.value);
+      if (!ids.length) return;
+      await (actions.removePlugins && actions.removePlugins(ids));
+    });
+  }
+  const mgr = E.pluginManager;
+  if (mgr) {
+    mgr.addEventListener('change', () => {
+      const n = $$('#pluginManager input[type="checkbox"]:checked').length;
+      if (E.btnPluginRemove) E.btnPluginRemove.disabled = n === 0;
+    });
+  }
+}
+
+export function renderPluginManager(list) {
+  if (!E.pluginManager) return;
+  const items = Array.isArray(list) ? list : [];
+  E.pluginManager.innerHTML = items.length
+    ? items.map((p) => `
+      <label class="plugin-row">
+        <input type="checkbox" value="${p.id}" />
+        <b>${p.name || p.id}</b>
+        <span class="fine">${p.source || '本地安装'} · ${new Date(p.installedAt || Date.now()).toLocaleDateString()}</span>
+      </label>`).join('')
+    : '<p class="fine" style="margin:0">还没有第三方插件。把 .zip 或 .js 拖到上面的安装区。</p>';
+  if (E.pluginManageCount) E.pluginManageCount.textContent = `${items.length} 个`;
+  if (E.btnPluginRemove) E.btnPluginRemove.disabled = true;
+}
 
 /* ---------------- 手机双摄 ---------------- */
 
@@ -1371,6 +1576,9 @@ Object.assign(ui, {
   updatePhoneUI,
   updateCamConsent,
   setMouseHold,
+  showSettingsPane,
+  applyAppearance,
+  renderPluginManager,
   startAlign,
   toast,
   appendChat,

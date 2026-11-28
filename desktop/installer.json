@@ -18,7 +18,7 @@
     "artifactName": "EyePilot-install-${version}.exe"
   },
   "nsis": {
-    "oneClick": true,
+    "oneClick": false,
     "perMachine": false,
     "allowElevation": false,
     "createDesktopShortcut": true,
@@ -27,7 +27,9 @@
     "runAfterFinish": true,
     "deleteAppDataOnUninstall": false,
     "installerIcon": "icon.ico",
-    "uninstallerIcon": "icon.ico"
+    "uninstallerIcon": "icon.ico",
+    "allowToChangeInstallationDirectory": true,
+    "license": "install-notice.txt"
   },
   "extraMetadata": {
     "name": "EyePilot"

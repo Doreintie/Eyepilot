@@ -1,6 +1,6 @@
 {
   "name": "eyepilot",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
   "description": "EyePilot · 瞳行 — 摄像头眼动追踪 + AI 用眼健康教练（黑客松 Demo）",
