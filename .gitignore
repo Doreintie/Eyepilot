@@ -29,7 +29,9 @@ tools/_pkt.tmp
 
 # 安装包构建产物
 desktop/installer-out/
+installer-out*/
 
 # 打包产物
 installer-out/
+installer-out*/
 desktop/installer.build.json
