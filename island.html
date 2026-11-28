@@ -140,7 +140,9 @@
 
   body.preview { align-items: center; background: #05070c; }
   body.preview #island { width: 300px; background: #0c1016; }
-  body.preview .chev { display: none; }
+  /* 预览里也允许展开：这里就是给用户试着点的，不再把箭头藏起来 */
+  body.preview .bar { cursor: default; }
+  .cell[hidden], .blink[hidden], .custom[hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -165,12 +167,12 @@
       <div class="alert" id="alert"><i></i><span id="alertText"></span></div>
 
       <div class="grid">
-        <div class="cell"><span>用眼时长</span><b id="cSession">--</b></div>
-        <div class="cell"><span>疲劳指数</span><b id="cFatigue">--</b></div>
-        <div class="cell"><span>健康分</span><b id="cHealth">--</b></div>
+        <div class="cell" data-key="session"><span>用眼时长</span><b id="cSession">--</b></div>
+        <div class="cell" data-key="fatigue"><span>疲劳指数</span><b id="cFatigue">--</b></div>
+        <div class="cell" data-key="health"><span>健康分</span><b id="cHealth">--</b></div>
         <div class="cell"><span>专注度</span><b id="cFocus">--</b></div>
         <div class="cell wide"><span>专注会话</span><b id="cFocusSession">未开始</b></div>
-        <div class="cell wide"><span>下次远眺</span><b id="cBreak">--</b></div>
+        <div class="cell wide" data-key="nextBreak"><span>下次远眺</span><b id="cBreak">--</b></div>
       </div>
 
       <div class="custom" id="custom">
@@ -199,6 +201,14 @@
   let peekTimer = 0;
   let mode = 'eye';
 
+  // 设置页会把「勾了哪些指标 / 自定义内容」推过来，预览要和真机一致
+  const cfg = {
+    enabled: true,
+    items: { blink: true, session: true, fatigue: true, health: true, nextBreak: true },
+    customLabel: '正在播放',
+    customText: '',
+  };
+
   const pad = (n) => String(n).padStart(2, '0');
   const clock = (s) => `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}`;
   // 专注会话是 25 分钟一轮，用 mm:ss 比 h:mm 直观
@@ -210,11 +220,20 @@
     document.body.style.background = '#05070c';
   }
 
+  function postHeight(h) {
+    if (!preview || window.parent === window) return;
+    try { window.parent.postMessage({ type: 'eyepilot:island-height', height: h }, '*'); } catch { /* noop */ }
+  }
+
+  let lastH = -1;
   function fitHeight() {
-    if (!host || !host.resize) return;
-    if (!expanded) { host.resize(300, COLLAPSED); return; }
-    const h = $('island').scrollHeight;
-    host.resize(300, Math.max(COLLAPSED + 30, Math.ceil(h) + 2));
+    const h = expanded
+      ? Math.max(COLLAPSED + 24, Math.ceil($('island').scrollHeight) + 2)
+      : COLLAPSED;
+    if (h === lastH) return;
+    lastH = h;
+    if (host && host.resize) host.resize(300, Math.min(460, h));
+    postHeight(h);
   }
 
   function setExpanded(on) {
@@ -226,7 +245,6 @@
 
   $('chev').addEventListener('click', (e) => {
     e.stopPropagation();
-    if (preview) return;
     manual = true;
     setExpanded(!expanded);
   });
@@ -234,10 +252,10 @@
   document.querySelectorAll('.mode').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (preview) return;
       mode = btn.dataset.mode;
       paintMode();
-      if (host && host.action) host.action('mode:' + mode);
+      // 预览只改自己，不去动真实输入方式，避免「只是看看」却把眼控切走
+      if (!preview && host && host.action) host.action('mode:' + mode);
     });
   });
 
@@ -250,6 +268,14 @@
 
   function paintMode() {
     document.querySelectorAll('.mode').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+  }
+
+  function applyVisibility() {
+    document.querySelectorAll('[data-key]').forEach((n) => {
+      n.hidden = cfg.items[n.dataset.key] === false;
+    });
+    const blink = document.querySelector('.blink');
+    if (blink) blink.hidden = cfg.items.blink === false;
   }
 
   function levelOf(p) {
@@ -272,6 +298,10 @@
   }
 
   function render(p) {
+    // 桌面版的推送里也带 items：勾掉「疲劳指数」就真的不显示，
+    // 之前这三个勾选框只是摆设。
+    if (p.items) cfg.items = { ...cfg.items, ...p.items };
+    applyVisibility();
     const lv = levelOf(p);
     $('dot').className = 'dot ' + (lv === 'on' ? '' : lv);
     $('blink').textContent = p.blink > 0 ? p.blink : '--';
@@ -317,13 +347,25 @@
       manual = false;
       setExpanded(false);
     }
+    fitHeight();
   }
 
   async function tick() {
     if (preview) {
-      mode = 'hybrid'; paintMode();
-      render({ live: true, blink: 17, session: 4280, fatigue: 28, health: 82, focus: 76,
-        nextBreak: 640, customLabel: '正在播放', customText: '晴天 — 周杰伦', alert: null });
+      // 预览：用示例数字演示展开后的样子，指标按设置里的勾选显示
+      render({
+        live: true,
+        blink: cfg.items.blink === false ? 0 : 17,
+        session: 4280,
+        fatigue: cfg.items.fatigue === false ? 0 : 28,
+        health: cfg.items.health === false ? 0 : 82,
+        focus: 76,
+        nextBreak: cfg.items.nextBreak === false ? null : 640,
+        focusSession: { running: true, finished: false, remain: 1240, total: 1500, score: 82, label: '专注' },
+        customLabel: cfg.customLabel || '正在播放',
+        customText: cfg.customText,
+        alert: null,
+      });
       return;
     }
     try {
@@ -339,7 +381,21 @@
     }
   }
 
+  window.addEventListener('message', (ev) => {
+    const d = ev.data;
+    if (!d || d.type !== 'eyepilot:island-config') return;
+    cfg.enabled = d.enabled !== false;
+    cfg.items = { ...cfg.items, ...(d.items || {}) };
+    cfg.customLabel = d.customLabel || '';
+    cfg.customText = d.customText || '';
+    if (d.mode) { mode = d.mode; paintMode(); }
+    applyVisibility();
+    if (preview) tick();
+    fitHeight();
+  });
+
   if (host && host.resize) host.resize(300, COLLAPSED);
+  applyVisibility();
   tick();
   setInterval(tick, 800);
 })();

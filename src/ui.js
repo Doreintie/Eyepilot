@@ -44,6 +44,7 @@ const ids = [
   'btnReplayTour', 'btnRevokeCam', 'camConsentState',
   'setNav', 'setBody', 'setSource', 'btnHelp',
   'bgUpload', 'btnBgPick', 'btnBgClear', 'setBgDim', 'bgDimHint', 'bgHint',
+  'setMoreAlpha', 'moreAlphaHint',
   'pluginDrop', 'pluginPick', 'pluginFile', 'pluginManager', 'pluginManageCount',
   'btnPluginRemove', 'pluginInstallMsg',
   'phonePill', 'phoneUrl', 'phoneDetail', 'phoneWeightHint', 'setPhoneWeight',
@@ -177,9 +178,11 @@ export function switchView(name) {
 
 function bindTopbar() {
   E.btnTheme.addEventListener('click', () => {
+    // 顶栏按钮只做「深/浅」快速切换，但要同时写回 themeMode，
+    // 否则设置里的三个按钮会和当前界面不一致，点一下又跳回去
     const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
-    document.documentElement.dataset.theme = next;
-    saveSettings({ theme: next });
+    saveSettings({ theme: next, themeMode: next });
+    actions.setThemeMode ? actions.setThemeMode(next) : applyAppearance();
     actions.onThemeChange && actions.onThemeChange();
   });
   E.btnStart.addEventListener('click', () => {
@@ -303,7 +306,8 @@ export function applyBigTargets() {
 export function updateModeUI() {
   const mode = ['eye', 'hybrid', 'head', 'mouse'].includes(app.settings.controlMode)
     ? app.settings.controlMode : 'eye';
-  $$('.mode-btn').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+  // 只认输入方式的按钮；外观的主题按钮也是 .mode-btn，之前会一起被清掉选中态
+  $$('.mode-btn[data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
   const label = { eye: '纯眼控', hybrid: '眼 + 鼠', head: '眼 + 头', mouse: '纯鼠标' }[mode];
   if (E.modePill) E.modePill.textContent = label;
   const hint = {
@@ -689,6 +693,7 @@ function bindCare() {
 const SET_PANES = [
   { key: 'health', label: '健康提醒', icon: '<svg viewBox="0 0 24 24"><path d="M3 12.5h4l2.2-5.5 3.2 11 2.6-7 1.8 3.5H21"/></svg>' },
   { key: 'eye', label: '眼控', icon: '<svg viewBox="0 0 24 24"><path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12Z"/><circle cx="12" cy="12" r="3"/></svg>' },
+  { key: 'island', label: '灵动岛', icon: '<svg viewBox="0 0 24 24"><rect x="2.8" y="8.2" width="18.4" height="7.6" rx="3.8"/><path d="M6.4 12h2.2"/><circle cx="17.6" cy="12" r=".9"/></svg>' },
   { key: 'look', label: '外观', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17"/></svg>' },
   { key: 'privacy', label: '数据隐私', icon: '<svg viewBox="0 0 24 24"><rect x="4.5" y="10" width="15" height="10" rx="2.4"/><path d="M8 10V7.6a4 4 0 0 1 8 0V10"/></svg>' },
   { key: 'about', label: '关于', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.8" r="1.05"/></svg>' },
@@ -701,7 +706,7 @@ const CARD_PANE = {
   视线微调: 'eye',
   使用中自校准: 'eye',
   手机双摄: 'eye',
-  灵动岛: 'look',
+  灵动岛: 'island',
   外观: 'look',
   数据与隐私: 'privacy',
   关于: 'about',
@@ -713,6 +718,7 @@ export function showSettingsPane(key) {
   setPaneKey = key || 'health';
   $$('.set-tab').forEach((b) => b.classList.toggle('on', b.dataset.pane === setPaneKey));
   $$('.set-pane').forEach((p) => p.classList.toggle('on', p.dataset.pane === setPaneKey));
+  if (setPaneKey === 'island') setTimeout(syncIslandPreview, 40);
 }
 
 function buildSettingsShell() {
@@ -749,7 +755,12 @@ export function applyAppearance() {
     const img = app.settings.bgImage;
     if (img) {
       const dim = (app.settings.bgDim == null ? 45 : app.settings.bgDim) / 100;
-      el.style.backgroundImage = `linear-gradient(rgba(3,6,11,${dim}), rgba(3,6,11,${dim})), url("${img}")`;
+      // v1.8.0：遮罩跟着主题走。之前浅色主题也盖一层黑纱，
+      // 白玻璃面板直接压在暗照片上，左右两边像两个界面（割裂感）。
+      const veil = theme === 'light'
+        ? `rgba(242, 246, 251, ${(0.34 + dim * 0.6).toFixed(3)})`
+        : `rgba(3, 6, 11, ${dim.toFixed(3)})`;
+      el.style.backgroundImage = `linear-gradient(${veil}, ${veil}), url("${img}")`;
       el.style.backgroundSize = 'cover';
       el.style.backgroundPosition = 'center';
       el.style.backgroundAttachment = 'fixed';
@@ -761,10 +772,22 @@ export function applyAppearance() {
     }
   }
 
+  // 「更多」弹出菜单的不透明度（设置 → 外观）
+  const alpha = Math.max(45, Math.min(100, app.settings.moreOpacity == null ? 92 : app.settings.moreOpacity));
+  document.documentElement.style.setProperty('--menu-alpha', (alpha / 100).toFixed(2));
+  if (E.moreAlphaHint) E.moreAlphaHint.textContent = `${Math.round(alpha)}%`;
+  if (E.setMoreAlpha) E.setMoreAlpha.value = String(Math.round(alpha));
+
   $$('.mode-btn[data-theme-mode]').forEach((b) => b.classList.toggle('on', b.dataset.themeMode === mode));
   if (E.bgDimHint) E.bgDimHint.textContent = `${app.settings.bgDim == null ? 45 : app.settings.bgDim}%`;
   if (E.setBgDim) E.setBgDim.value = String(app.settings.bgDim == null ? 45 : app.settings.bgDim);
-  if (E.bgHint) E.bgHint.textContent = app.settings.bgImage ? '已使用自定义背景（仅存本机）。' : '没有自定义背景，使用主题默认底纹。';
+  if (E.bgHint) {
+    E.bgHint.textContent = app.settings.bgImage
+      ? (theme === 'light'
+        ? '已使用自定义背景（仅存本机）。浅色主题下遮罩会自动改成白色，避免暗照片把界面割成两半。'
+        : '已使用自定义背景（仅存本机）。觉得照片太抢眼就把「背景遮罩」拉高。')
+      : '没有自定义背景，使用主题默认底纹。';
+  }
 }
 
 themeMedia.addEventListener('change', () => {
@@ -806,6 +829,47 @@ function bindAppearance() {
   if (E.setBgDim) {
     E.setBgDim.addEventListener('input', () => { if (E.bgDimHint) E.bgDimHint.textContent = `${E.setBgDim.value}%`; });
     E.setBgDim.addEventListener('change', () => actions.setBgDim && actions.setBgDim(Number(E.setBgDim.value)));
+  }
+  if (E.setMoreAlpha) {
+    E.setMoreAlpha.addEventListener('input', () => {
+      if (E.moreAlphaHint) E.moreAlphaHint.textContent = `${E.setMoreAlpha.value}%`;
+      document.documentElement.style.setProperty('--menu-alpha', (Number(E.setMoreAlpha.value) / 100).toFixed(2));
+    });
+    E.setMoreAlpha.addEventListener('change', () => actions.setMoreAlpha && actions.setMoreAlpha(Number(E.setMoreAlpha.value)));
+  }
+  bindIslandPreview();
+}
+
+/* ---------------- 灵动岛预览：真实组件 + 同步设置 ---------------- */
+
+export function syncIslandPreview() {
+  const f = E.islandPreview;
+  if (!f || !f.contentWindow) return;
+  const isl = app.settings.island || {};
+  f.contentWindow.postMessage({
+    type: 'eyepilot:island-config',
+    enabled: isl.enabled !== false,
+    items: isl.items || {},
+    customLabel: isl.customLabel || '',
+    customText: isl.customText || '',
+    mode: app.settings.controlMode || 'eye',
+  }, '*');
+}
+
+function bindIslandPreview() {
+  window.addEventListener('message', (ev) => {
+    const d = ev.data;
+    if (!d || d.type !== 'eyepilot:island-height' || !E.islandPreview) return;
+    const box = E.islandPreview.parentElement;
+    if (!box) return;
+    const h = Math.max(46, Math.min(420, Math.round(d.height || 0)));
+    box.style.height = `${h + 14}px`;
+  });
+  if (E.islandPreview) {
+    E.islandPreview.addEventListener('load', () => {
+      syncIslandPreview();
+      setTimeout(syncIslandPreview, 200);
+    });
   }
 }
 
@@ -1154,6 +1218,7 @@ function applySettingsToForm() {
   if (E.islandLabel) E.islandLabel.value = isl.customLabel || '';
   if (E.islandText) E.islandText.value = isl.customText || '';
   if (E.islandPill) E.islandPill.textContent = window.eyePilotDesktop ? '桌面版 · 已连接' : '网页版 · 仅预览';
+  syncIslandPreview();
   E.setAlertBlink.checked = !!s.alertBlink;
   E.setAlertDist.checked = !!s.alertDistance;
   E.setAlertLight.checked = !!s.alertLight;
@@ -1266,7 +1331,9 @@ function bindSettings() {
   if (E.btnResetOffset) {
     E.btnResetOffset.addEventListener('click', () => actions.resetOffset && actions.resetOffset());
   }
-  $$('.mode-btn').forEach((btn) => {
+  // v1.8.0：这里原来选了所有 .mode-btn，点「浅色 / 深色」时 dataset.mode 是 undefined，
+  // setControlMode(undefined) 兜底成 eye——于是改个主题就把输入方式切成了纯眼控。
+  $$('.mode-btn[data-mode]').forEach((btn) => {
     btn.addEventListener('click', () => {
       actions.setControlMode && actions.setControlMode(btn.dataset.mode);
     });
@@ -1311,17 +1378,26 @@ function bindSettings() {
     E.btnResetAuto.addEventListener('click', () => actions.resetAutoOffset && actions.resetAutoOffset());
   }
   if (E.setIsland) {
-    E.setIsland.addEventListener('change', () => actions.setIslandEnabled && actions.setIslandEnabled(E.setIsland.checked));
+    E.setIsland.addEventListener('change', () => {
+      actions.setIslandEnabled && actions.setIslandEnabled(E.setIsland.checked);
+      syncIslandPreview();
+    });
   }
   const islandItemMap = { isBlink: 'blink', isSession: 'session', isFatigue: 'fatigue', isHealth: 'health', isBreak: 'nextBreak' };
   for (const [id, key] of Object.entries(islandItemMap)) {
     const el = E[id];
     if (!el) continue;
-    el.addEventListener('change', () => actions.setIslandItem && actions.setIslandItem(key, el.checked));
+    el.addEventListener('change', () => {
+      actions.setIslandItem && actions.setIslandItem(key, el.checked);
+      syncIslandPreview();
+    });
   }
   if (E.islandLabel && E.islandText) {
-    const push = () => actions.setIslandCustom
-      && actions.setIslandCustom(E.islandLabel.value.trim(), E.islandText.value.trim());
+    const push = () => {
+      actions.setIslandCustom
+        && actions.setIslandCustom(E.islandLabel.value.trim(), E.islandText.value.trim());
+      syncIslandPreview();
+    };
     E.islandLabel.addEventListener('change', push);
     E.islandText.addEventListener('change', push);
   }
@@ -1578,6 +1654,7 @@ Object.assign(ui, {
   setMouseHold,
   showSettingsPane,
   applyAppearance,
+  syncIslandPreview,
   renderPluginManager,
   startAlign,
   toast,

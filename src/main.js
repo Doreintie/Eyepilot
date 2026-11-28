@@ -7,6 +7,7 @@ import {
   ui, setStatus, setOnboard, renderLive, renderMetrics, renderCharts, renderAlerts,
   notifyAlert, renderAssessment, appendChat, setDemoActive, setPrimaryButton,
   setCameraOptions, openBreak, closeBreak, updateBreakRing, showReport, calibrationEls,
+  showSettingsPane,
 } from './ui.js';
 import { VisionEngine } from './vision.js';
 import { GazeTracker, Calibrator } from './gaze.js';
@@ -612,6 +613,10 @@ const actions = {
     saveSettings({ bgDim: Math.max(0, Math.min(85, Number(v) || 0)) });
     ui.applyAppearance();
   },
+  setMoreAlpha: (v) => {
+    saveSettings({ moreOpacity: Math.max(45, Math.min(100, Number(v) || 92)) });
+    ui.applyAppearance();
+  },
   installPlugins: async (files) => {
     const r = await installFromFiles(files);
     if (r.added.length) {
@@ -638,14 +643,17 @@ const actions = {
   /** 直接跳到「手机双摄」卡片：没有可用摄像头的人不该先学会找设置 */
   openPhoneCard: () => {
     showView('settings');
-    if (phoneLink && !phoneLink.active) actions.startPhoneLink();
+    // v1.8.0：手机双摄在「眼控」类目里，之前没切类目，scrollIntoView 找不到可见目标，
+    // 看起来就只是跳到了设置页（还停在「外观」），等于没反应。
+    showSettingsPane('eye');
     setTimeout(() => {
       const card = document.querySelector('.phone-card');
       if (!card) return;
       card.scrollIntoView({ block: 'center', behavior: 'smooth' });
       card.classList.add('flash');
       setTimeout(() => card.classList.remove('flash'), 1900);
-    }, 240);
+    }, 220);
+    ui.toast('手机当第二只摄像头', '同一个 Wi-Fi：点「开启局域网」→ 手机打开地址 → 开始推流；两路融合能压抖动', 'info', 6200);
   },
   revokeCamera: () => {
     resetCameraConsent();

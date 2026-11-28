@@ -57,6 +57,7 @@ export const DEFAULT_SETTINGS = {
   themeMode: 'dark',      // dark | light | system
   bgImage: '',            // 自定义背景（dataURL，仅本地）
   bgDim: 45,
+  moreOpacity: 92,        // 左下角「更多」展开菜单的底色不透明度（%）
   llm: { base: '', key: '', model: '' },
 };
 

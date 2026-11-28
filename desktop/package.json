@@ -1,13 +1,13 @@
 {
   "name": "eyepilot-desktop",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "private": true,
   "description": "EyePilot desktop shell (Electron)",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
     "app": "node prepare-app.cjs",
-    "dist": "node prepare-app.cjs && electron-packager build/app EyePilot --platform=win32 --arch=x64 --out=build/dist --overwrite --asar --app-version=1.7.0"
+    "dist": "node prepare-app.cjs && electron-packager build/app EyePilot --platform=win32 --arch=x64 --out=build/dist --overwrite --asar --app-version=1.8.0"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",

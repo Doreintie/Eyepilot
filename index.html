@@ -92,8 +92,8 @@
             <span>设置</span>
           </button>
         </div>
-        <button class="rail-btn rail-more-toggle" id="btnRailMore" data-gaze aria-expanded="false" aria-haspopup="true">
-          <svg viewBox="0 0 24 24"><circle cx="5.4" cy="5.4" r="2.2"/><circle cx="12" cy="5.4" r="2.2"/><circle cx="18.6" cy="5.4" r="2.2"/><circle cx="5.4" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="18.6" cy="12" r="2.2"/><circle cx="5.4" cy="18.6" r="2.2"/><circle cx="12" cy="18.6" r="2.2"/><circle cx="18.6" cy="18.6" r="2.2"/></svg>
+        <button class="rail-btn rail-more-toggle" id="btnRailMore" data-gaze aria-expanded="false" aria-haspopup="true" title="更多：插件中心 / 手机摄像头 / 设置">
+          <svg viewBox="0 0 24 24"><path d="M4.6 7.4h14.8M4.6 12h14.8M4.6 16.6h9.2"/></svg>
           <span>更多</span>
         </button>
       </div>
@@ -509,7 +509,7 @@
     <!-- ============ 设置 ============ -->
     <section class="view" data-view="settings">
       <div class="view-head">
-        <div><h1>设置</h1><p class="sub">校准、点击方式、提醒阈值与数据管理。</p></div>
+        <div><h1>设置</h1><p class="sub">健康提醒、眼控、灵动岛、外观与数据管理，左边选类目，右边改细节。</p></div>
       </div>
 
       <div class="settings-shell">
@@ -660,8 +660,14 @@
         </div>
 
         <div class="card island-card">
-          <div class="card-head"><h3>灵动岛</h3><span class="pill tiny" id="islandPill">桌面版</span></div>
-          <p class="body-text">屏幕顶部常驻的小面板，可拖动、可展开。显示眨眼频率、用眼时长等；指标异常时会自动弹开提醒。<b>只在桌面版（EyePilot.exe）里浮在桌面上</b>，网页版这里只做预览。</p>
+          <div class="card-head"><h3>灵动岛</h3><span class="pill tiny" id="islandPill">网页版 · 仅预览</span></div>
+          <p class="body-text">屏幕顶部常驻的一条小面板：不抢焦点、不挡内容，抬眼就能看到眨眼频率和专注剩余时间；需要细节时点箭头展开。<b>浮在桌面上的能力只在桌面版（EyePilot.exe）里有</b>，这里是一条可以点的预览。</p>
+          <ol class="island-guide">
+            <li><b>拖动位置</b>：按住面板空白处拖动，松手就记住，下次还在原地。</li>
+            <li><b>展开 / 收起</b>：点右侧 <span class="kbd">∨</span> 看用眼时长、疲劳、健康分与下次远眺，再点一次收起。</li>
+            <li><b>直接切模式</b>：收起条上的「眼 / 混 / 头 / 鼠」就是输入方式，不用回主界面。</li>
+            <li><b>提醒不弹窗</b>：指标异常时只在收起条上亮一行黄字，8 秒后自己消失，不会挡住屏幕。</li>
+          </ol>
           <label class="switch-row">启用灵动岛
             <input type="checkbox" id="setIsland" checked /><i class="switch"></i>
           </label>
@@ -676,18 +682,19 @@
             <input type="text" id="islandLabel" maxlength="8" placeholder="标题（如：正在播放）" />
             <input type="text" id="islandText" maxlength="40" placeholder="内容（如：晴天 - 周杰伦）" />
           </div>
+          <p class="fine island-preview-cap">下面是真实组件，不是截图：点 <span class="kbd">∨</span> 展开，点「眼 / 混 / 头 / 鼠」切模式；上面勾选的指标会同步到预览里。</p>
           <div class="island-preview">
             <iframe id="islandPreview" src="/island.html?preview=1" title="灵动岛预览" loading="lazy"></iframe>
           </div>
           <div class="row-between">
-            <span class="fine">自定义内容也可以由外部程序写入。</span>
+            <span class="fine">自定义内容也可以由外部程序写入（例如播放器）。</span>
             <button class="btn ghost sm" id="btnIslandShow">在桌面显示 / 隐藏</button>
           </div>
         </div>
 
         <div class="card">
           <div class="card-head"><h3>外观</h3><span class="pill tiny">界面</span></div>
-          <p class="body-text">主题跟随系统时会自动切换；自定义背景只在本地保存，不会上传。</p>
+          <p class="body-text">主题跟随系统时会自动切换；自定义背景只在本地保存，不会上传。切换主题<b>不会</b>动你的输入方式，眼控该开还开着。</p>
           <div class="mode-switch mode-switch-3">
             <button class="mode-btn" data-theme-mode="dark" data-gaze>深色</button>
             <button class="mode-btn" data-theme-mode="light" data-gaze>浅色</button>
@@ -702,7 +709,9 @@
             </span>
           </div>
           <label class="range-row" style="margin-top:10px"><span>背景遮罩</span><input type="range" id="setBgDim" min="0" max="85" step="5" value="45" /><b id="bgDimHint">45%</b></label>
+          <label class="range-row"><span>更多菜单</span><input type="range" id="setMoreAlpha" min="45" max="100" step="5" value="92" /><b id="moreAlphaHint">92%</b></label>
           <p class="fine" id="bgHint">没有自定义背景，使用主题默认底纹。</p>
+          <p class="fine">「更多菜单」是左下角更多按钮展开后的底色不透明度：越低越透、越高越好读。</p>
         </div>
 
         <div class="card">
@@ -724,7 +733,7 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.7.0</span></div>
+          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.8.0</span></div>
           <p class="body-text">EyePilot · 瞳行，校园黑客松参赛作品。技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移特征 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件，普通笔记本摄像头即可运行。</p>
           <p class="fine">本作品不构成医疗建议。若持续眼干、眼痛或视力模糊，请就医。</p>
         </div>
