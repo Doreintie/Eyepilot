@@ -189,7 +189,9 @@ export function drawHeatmap(canvas, grid, cols = 24, rows = 12, { max } = {}) {
   if (peak > 0) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.filter = `blur(${Math.max(3.5, cw * 0.18)}px)`;
+    // v1.9.1：原来的 blur 太大（cw*0.18），整张图像一团雾；
+    // 现在用更小的模糊 + 更紧的半径 + 中心实心点，热区边界更清楚。
+    ctx.filter = `blur(${Math.max(1.6, cw * 0.075)}px)`;
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const v = grid[r * cols + c] || 0;
@@ -197,18 +199,28 @@ export function drawHeatmap(canvas, grid, cols = 24, rows = 12, { max } = {}) {
         const t = Math.pow(v / peak, 0.6);
         const cx = c * cw + cw / 2;
         const cy = r * ch + ch / 2;
-        const rad = Math.max(cw, ch) * (0.7 + t * 1.05);
+        const rad = Math.max(cw, ch) * (0.5 + t * 0.78);
         let color;
-        if (t > 0.72) color = `rgba(255,193,77,${0.14 + t * 0.40})`;
-        else if (t > 0.4) color = `rgba(124,156,255,${0.14 + t * 0.42})`;
-        else color = `rgba(46,230,214,${0.10 + t * 0.36})`;
+        if (t > 0.72) color = `rgba(255,193,77,${0.22 + t * 0.48})`;
+        else if (t > 0.4) color = `rgba(124,156,255,${0.20 + t * 0.48})`;
+        else color = `rgba(46,230,214,${0.16 + t * 0.42})`;
         const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
         g.addColorStop(0, color);
+        g.addColorStop(0.55, color.replace(/[\d.]+\)$/, '0.16)'));
         g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(cx, cy, rad, 0, Math.PI * 2);
         ctx.fill();
+        // 中心再加一个实心点，避免高强度区域被糊成一片
+        if (t > 0.78) {
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.fillStyle = 'rgba(255, 214, 120, .7)';
+          ctx.beginPath();
+          ctx.arc(cx, cy, Math.max(1.4, cw * 0.05), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalCompositeOperation = 'lighter';
+        }
       }
     }
     ctx.restore();

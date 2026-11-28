@@ -20,7 +20,7 @@
   --fv-shadow: 0 30px 76px -30px rgba(2,9,18,.82);
 }
 
-#focusSessionRoot .fv-wrap { display: flex; flex-direction: column; gap: 14px; }
+#focusSessionRoot .fv-wrap { display: flex; flex-direction: column; gap: 11px; }
 
 /* 顶栏：品牌 + 场景段 + 状态芯片 */
 #focusSessionRoot .fv-bar {
@@ -83,15 +83,16 @@
 }
 
 /* 主区：左舞台 + 右卡片列 */
-#focusSessionRoot .fv-main { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(300px, .7fr); gap: 14px; align-items: stretch; }
+#focusSessionRoot .fv-main { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(300px, .7fr); gap: 12px; align-items: stretch; }
 
 /* 左：环形舞台 */
-#focusSessionRoot .fv-stage { display: flex; flex-direction: column; padding: 20px 26px 18px; }
+#focusSessionRoot .fv-stage { display: flex; flex-direction: column; padding: 16px 24px 13px; }
 #focusSessionRoot .fv-stage::before {
   content: ""; position: absolute; left: -6%; top: -26%; width: 60%; height: 92%;
   background: radial-gradient(circle, rgba(112,224,232,.26), transparent 68%); filter: blur(8px); pointer-events: none;
 }
 #focusSessionRoot .fv-stage-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; position: relative; z-index: 1; }
+#focusSessionRoot .fv-stage-head .fv-chip { flex: none; margin-top: 2px; }
 #focusSessionRoot .fv-eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: 2.6px; text-transform: uppercase; color: var(--fv-ink-3); font-weight: 700; }
 #focusSessionRoot .fv-stage-head h3 { font-size: 15px; font-weight: 500; margin-top: 6px; color: var(--fv-ink); letter-spacing: .2px; }
 #focusSessionRoot .fv-stage-head p { font-size: 11.5px; color: var(--fv-ink-3); margin-top: 3px; }
@@ -119,7 +120,7 @@
   box-shadow: 0 0 12px var(--fv-mint); animation: fvBreathe 3.4s ease-in-out infinite;
 }
 
-#focusSessionRoot .fv-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; position: relative; z-index: 1; }
+#focusSessionRoot .fv-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; position: relative; z-index: 1; margin-top: 2px; }
 #focusSessionRoot .fv-btn {
   font-family: inherit; font-size: 12.5px; color: var(--fv-ink); padding: 9px 16px; border-radius: 11px;
   cursor: pointer; letter-spacing: .2px; transition: .24s ease; min-height: 36px;
@@ -135,7 +136,7 @@
   box-shadow: 0 8px 26px -10px var(--fv-mint), inset 0 1px 0 rgba(255,255,255,.5);
 }
 #focusSessionRoot .fv-btn.primary:hover { filter: brightness(1.06); }
-#focusSessionRoot .fv-note { font-size: 11.5px; color: var(--fv-ink-3); text-align: center; line-height: 1.6; margin-top: 10px; position: relative; z-index: 1; }
+#focusSessionRoot .fv-note { font-size: 11.5px; color: var(--fv-ink-3); text-align: center; line-height: 1.6; margin-top: 7px; position: relative; z-index: 1; }
 
 /* 右：只留「当前状态」一张卡，其余收进下方「更多数据」 */
 #focusSessionRoot .fv-rail { display: block; }
@@ -233,6 +234,11 @@
 :root[data-theme="light"] #focusSessionRoot .fv-glass { border-color: rgba(255,255,255,.7); }
 :root[data-theme="light"] #focusSessionRoot .fv-metrics > div { background: rgba(255,255,255,.42); }
 :root[data-theme="light"] #focusSessionRoot .fv-sig { background: rgba(255,255,255,.42); border-color: rgba(17,34,64,.10); }
+:root[data-theme="light"] #focusSessionRoot .fv-blocks i { background: rgba(13, 26, 40, .13); }
+:root[data-theme="light"] #focusSessionRoot .fv-blocks i.deep { background: rgba(15, 156, 120, .82); }
+:root[data-theme="light"] #focusSessionRoot .fv-blocks i.ok { background: rgba(42, 127, 184, .78); }
+:root[data-theme="light"] #focusSessionRoot .fv-blocks i.warn { background: rgba(184, 118, 0, .78); }
+:root[data-theme="light"] #focusSessionRoot .fv-blocks i.bad { background: rgba(217, 43, 71, .78); }
 :root[data-theme="light"] #focusSessionRoot .fv-seg button.on { color: #16202f; }
 :root[data-theme="light"] #focusSessionRoot .fv-btn { color: var(--fv-ink); }
 
@@ -243,4 +249,25 @@
   #focusSessionRoot .fv-score-card { position: static; }
   #focusSessionRoot .fv-legend { display: none; }
   #focusSessionRoot .fv-more-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+
+/* 矮窗口（约 600–720px 高）：把非核心元素收紧，保证时间轴在首屏完整可见 */
+@media (max-height: 720px) {
+  .views { padding: 12px 20px 18px; }
+  .view[data-view="focus"] .view-head { margin-bottom: 6px; }
+  .view[data-view="focus"] .view-head h1 { font-size: 21px; }
+  #focusSessionRoot .fv-eyebrow { display: none; }
+  #focusSessionRoot .fv-note { display: none; }
+  #focusSessionRoot .fv-stage { padding: 10px 18px 8px; }
+  #focusSessionRoot .fv-ring { width: min(230px, 34vh); }
+  #focusSessionRoot .fv-ringwrap { padding: 4px 0 2px; }
+  #focusSessionRoot .fv-tl { padding: 10px 16px 10px; }
+}
+@media (max-height: 640px) {
+  #focusSessionRoot .fv-ring { width: min(180px, 30vh); }
+  #focusSessionRoot .fv-actions { gap: 6px; }
+  #focusSessionRoot .fv-btn { min-height: 30px; padding: 6px 12px; font-size: 12px; }
+  #focusSessionRoot .fv-score > b { font-size: 32px; }
+  #focusSessionRoot .fv-metrics { margin-top: 8px; }
 }

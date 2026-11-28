@@ -102,15 +102,11 @@
     <!-- ============ 专注会话 ============ -->
     <section class="view active" data-view="focus">
       <div class="view-head">
-        <div>
-          <h1>专注会话</h1>
-          <p class="sub">25 分钟双场景专注计时；纸质看在座与生理信号，电脑看视线与凝视。</p>
-        </div>
+        <div><h1>专注会话</h1></div>
         <div class="head-tools">
           <button class="icon-btn" data-help="focus" data-gaze title="专注分怎么算" aria-label="专注分怎么算">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.1a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.5"/><circle cx="12" cy="17.2" r="1.05"/></svg>
           </button>
-          <span class="pill tiny" id="focusLivePill"><i class="dot"></i>摄像头未启动</span>
         </div>
       </div>
       <div class="focus-view" id="focusSessionRoot"></div>
@@ -316,7 +312,7 @@
         <div class="kpi"><span>本次用眼</span><b id="kSession">--</b><em>分钟</em><i class="bar"><u id="kSessionBar"></u></i></div>
         <div class="kpi"><span>平均眨眼</span><b id="kBlink">--</b><em>次/分</em><i class="bar"><u id="kBlinkBar"></u></i></div>
         <div class="kpi"><span>平均闭眼</span><b id="kBlinkDur">--</b><em>ms</em><i class="bar"><u id="kBlinkDurBar"></u></i></div>
-        <div class="kpi"><span>PERCLOS</span><b id="kPerclos">--</b><em>%</em><i class="bar"><u id="kPerclosBar"></u></i></div>
+        <div class="kpi"><span>PERCLOS <i class="kpi-q" title="PERCLOS = 眼睛闭合时间占比。观察窗口内眼睛闭合超过 80% 的时间越长，这个值越高，通常用来衡量疲劳。本程序用 1 分钟滑动窗口估算。">?</i></span><b id="kPerclos">--</b><em>%</em><i class="bar"><u id="kPerclosBar"></u></i></div>
         <div class="kpi"><span>最近视距</span><b id="kDistance">--</b><em>cm</em><i class="bar"><u id="kDistanceBar"></u></i></div>
         <div class="kpi"><span>环境照度</span><b id="kLight">--</b><em>lux*</em><i class="bar"><u id="kLightBar"></u></i></div>
         <div class="kpi"><span>专注度</span><b id="kFocus">--</b><em>/100</em><i class="bar"><u id="kFocusBar"></u></i></div>
@@ -510,7 +506,7 @@
     <!-- ============ 设置 ============ -->
     <section class="view" data-view="settings">
       <div class="view-head">
-        <div><h1>设置</h1><p class="sub">健康提醒、眼控、灵动岛、外观与数据管理，左边选类目，右边改细节。</p></div>
+        <div><h1>设置</h1></div>
       </div>
 
       <div class="settings-shell">
@@ -736,7 +732,7 @@
           </div>
           <label class="range-row" style="margin-top:10px"><span>背景遮罩</span><input type="range" id="setBgDim" min="0" max="85" step="5" value="45" /><b id="bgDimHint">45%</b></label>
           <label class="range-row"><span>更多菜单</span><input type="range" id="setMoreAlpha" min="45" max="100" step="5" value="92" /><b id="moreAlphaHint">92%</b></label>
-          <label class="range-row"><span>面板不透明</span><input type="range" id="setCardAlpha" min="20" max="100" step="5" value="60" /><b id="cardAlphaHint">60%</b></label>
+          <label class="range-row"><span>面板不透明</span><input type="range" id="setCardAlpha" min="0" max="100" step="5" value="60" /><b id="cardAlphaHint">60%</b></label>
           <div class="apx-row">
             <div class="apx" id="apxBg"><b>背景遮罩</b><small id="apxBgVal">45%</small></div>
             <div class="apx apx-menu" id="apxMenu"><b>更多菜单</b><small id="apxMenuVal">92%</small>
@@ -744,7 +740,7 @@
             </div>
           </div>
           <p class="fine" id="bgHint">没有自定义背景，使用主题默认底纹。</p>
-          <p class="fine">「面板不透明」控制卡片、顶栏、侧栏的玻璃底色；调到 40% 以下会更透，字也更难读。</p>
+          <p class="fine">「面板不透明」控制卡片、顶栏、侧栏的玻璃底色；拉到 0% 时面板完全透明，只剩文字浮在背景上。</p>
         </div>
 
         <div class="card">
@@ -766,7 +762,7 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.9.0</span></div>
+          <div class="card-head"><h3>关于</h3><span class="pill tiny">v1.9.1</span></div>
           <p class="body-text">EyePilot · 瞳行 — <b>AI 专注与护眼助手</b>。用一颗普通摄像头读懂你的专注与用眼状态：25 分钟专注会话、眨眼 / 视距 / 光照监测、护眼训练与 AI 建议。眼控是可选的输入方式之一，不开摄像头也能用计时与护眼。</p>
           <p class="body-text">技术栈：MediaPipe Face Landmarker（478 点）+ 虹膜相对位移 + 岭回归视线映射 + 一欧元滤波 + 行为统计模型。无需专用硬件。</p>
           <p class="fine">本作品不构成医疗建议。若持续眼干、眼痛或视力模糊，请就医。</p>

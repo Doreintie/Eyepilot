@@ -47,7 +47,7 @@ const ids = [
   'bgUpload', 'btnBgPick', 'btnBgClear', 'setBgDim', 'bgDimHint', 'bgHint',
   'setMoreAlpha', 'moreAlphaHint', 'setCardAlpha', 'cardAlphaHint',
   'apxBg', 'apxBgVal', 'apxMenu', 'apxMenuVal', 'apxMenuCard',
-  'setCloseToTray', 'closeHint', 'btnResetLayout', 'generalPill', 'phoneQr', 'focusLivePill',
+  'setCloseToTray', 'closeHint', 'btnResetLayout', 'generalPill', 'phoneQr',
   'loadingGate', 'loadingText', 'loadingSub',
   'pluginDrop', 'pluginPick', 'pluginFile', 'pluginManager', 'pluginManageCount',
   'btnPluginRemove', 'pluginInstallMsg',
@@ -189,6 +189,9 @@ function bindTopbar() {
     const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
     saveSettings({ theme: next, themeMode: next });
     actions.setThemeMode ? actions.setThemeMode(next) : applyAppearance();
+    if (document.documentElement.dataset.autoLight === '1') {
+      toast('背景偏亮，已自动用深色文字', '把「设置 → 外观 → 背景遮罩」拉高，或换一张暗一点的图，就能回到深色界面。', 'info', 5200);
+    }
     actions.onThemeChange && actions.onThemeChange();
   });
   E.btnStart.addEventListener('click', () => {
@@ -753,21 +756,67 @@ function buildSettingsShell() {
 
 const themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
 
+/** 取一张图（dataURL / URL）的平均亮度，0=黑 1=白 */
+function sampleLum(source) {
+  const c = document.createElement('canvas');
+  c.width = 32;
+  c.height = 32;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  try {
+    ctx.drawImage(source, 0, 0, 32, 32);
+    const d = ctx.getImageData(0, 0, 32, 32).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      sum += 0.2126 * (d[i] / 255) + 0.7152 * (d[i + 1] / 255) + 0.0722 * (d[i + 2] / 255);
+    }
+    return sum / (d.length / 4);
+  } catch {
+    return null;
+  }
+}
+
+/** 老数据没有 bgLum：后台补算一次，再重新应用外观 */
+export function ensureBgLum() {
+  if (!app.settings.bgImage || app.settings.bgLum != null) return;
+  const img = new Image();
+  img.onload = () => {
+    const lum = sampleLum(img);
+    if (lum == null) return;
+    saveSettings({ bgLum: lum });
+    applyAppearance();
+  };
+  img.src = app.settings.bgImage;
+}
+
 export function applyAppearance() {
   const mode = app.settings.themeMode || 'dark';
-  const theme = mode === 'system' ? (themeMedia.matches ? 'dark' : 'light') : (mode === 'light' ? 'light' : 'dark');
+  const base = mode === 'system' ? (themeMedia.matches ? 'dark' : 'light') : (mode === 'light' ? 'light' : 'dark');
+  const dim = (app.settings.bgDim == null ? 45 : app.settings.bgDim) / 100;
+  const card = Math.max(0, Math.min(100, app.settings.cardAlpha == null ? 58 : app.settings.cardAlpha)) / 100;
+
+  // 自适应对比度：深色主题 + 很亮的自定义背景时，玻璃底会接近白，
+  // 白字就读不清了。这时自动切到浅色文字（等价于浅色主题），
+  // 背景图仍然保留；把遮罩拉高、或换成暗图，就会自动切回来。
+  const lum = app.settings.bgImage ? app.settings.bgLum : null;
+  let auto = false;
+  if (base === 'dark' && lum != null) {
+    const eff = lum * (1 - dim) + 0.012 * dim;
+    const surface = eff * (1 - card) + 0.02 * card;
+    if (surface > 0.5) auto = true;
+  }
+  const theme = auto ? 'light' : base;
   document.documentElement.dataset.theme = theme;
+  document.documentElement.dataset.autoLight = auto ? '1' : '';
 
   const el = document.getElementById('app');
   if (el) {
     const img = app.settings.bgImage;
     if (img) {
-      const dim = (app.settings.bgDim == null ? 45 : app.settings.bgDim) / 100;
       // v1.8.0：遮罩跟着主题走。之前浅色主题也盖一层黑纱，
       // 白玻璃面板直接压在暗照片上，左右两边像两个界面（割裂感）。
       const veil = theme === 'light'
         ? `rgba(242, 246, 251, ${(0.34 + dim * 0.6).toFixed(3)})`
-        : `rgba(3, 6, 11, ${dim.toFixed(3)})`;
+        : `rgba(3, 6, 11, ${(dim).toFixed(3)})`;
       el.style.backgroundImage = `linear-gradient(${veil}, ${veil}), url("${img}")`;
       el.style.backgroundSize = 'cover';
       el.style.backgroundPosition = 'center';
@@ -787,13 +836,16 @@ export function applyAppearance() {
   if (E.setMoreAlpha) E.setMoreAlpha.value = String(Math.round(alpha));
 
   // 卡片空白处的底色不透明度：直接覆盖玻璃变量，主题切换时重算
-  const card = Math.max(20, Math.min(100, app.settings.cardAlpha == null ? 58 : app.settings.cardAlpha)) / 100;
   const rgb = theme === 'light' ? '255, 255, 255' : '7, 17, 29';
   const soft = theme === 'light' ? '255, 255, 255' : '8, 20, 33';
   const strongRgb = theme === 'light' ? '255, 255, 255' : '6, 14, 25';
   document.documentElement.style.setProperty('--glass-base', `rgba(${rgb}, ${card.toFixed(2)})`);
   document.documentElement.style.setProperty('--glass-base-soft', `rgba(${soft}, ${card.toFixed(2)})`);
-  document.documentElement.style.setProperty('--glass-base-strong', `rgba(${strongRgb}, ${Math.min(1, card + 0.12).toFixed(2)})`);
+  document.documentElement.style.setProperty('--glass-base-strong', `rgba(${strongRgb}, ${(card <= 0 ? 0 : Math.min(1, card + 0.12)).toFixed(2)})`);
+  // 0%：连玻璃的白纱高光和模糊一起去掉，才是真的“完全透明”
+  document.documentElement.dataset.glass = card <= 0 ? '0' : '1';
+  if (card <= 0) document.documentElement.style.setProperty('--glass', 'none');
+  else document.documentElement.style.removeProperty('--glass');
   if (E.cardAlphaHint) E.cardAlphaHint.textContent = `${Math.round(card * 100)}%`;
   if (E.setCardAlpha) E.setCardAlpha.value = String(Math.round(card * 100));
 
@@ -801,7 +853,6 @@ export function applyAppearance() {
   if (E.apxBg) {
     const url = app.settings.bgImage || './assets/bg-iceland.jpg';
     E.apxBg.style.backgroundImage = `url("${url}")`;
-    const dim = (app.settings.bgDim == null ? 45 : app.settings.bgDim) / 100;
     const veil = theme === 'light'
       ? `rgba(242, 246, 251, ${(0.34 + dim * 0.6).toFixed(3)})`
       : `rgba(3, 6, 11, ${dim.toFixed(3)})`;
@@ -814,11 +865,13 @@ export function applyAppearance() {
   if (E.bgDimHint) E.bgDimHint.textContent = `${app.settings.bgDim == null ? 45 : app.settings.bgDim}%`;
   if (E.setBgDim) E.setBgDim.value = String(app.settings.bgDim == null ? 45 : app.settings.bgDim);
   if (E.bgHint) {
-    E.bgHint.textContent = app.settings.bgImage
-      ? (theme === 'light'
-        ? '已使用自定义背景（仅存本机）。浅色主题下遮罩会自动改成白色，避免暗照片把界面割成两半。'
-        : '已使用自定义背景（仅存本机）。觉得照片太抢眼就把「背景遮罩」拉高。')
-      : '没有自定义背景，使用主题默认底纹。';
+    if (!app.settings.bgImage) {
+      E.bgHint.textContent = '没有自定义背景，使用主题默认底纹。';
+    } else if (auto) {
+      E.bgHint.textContent = '背景偏亮，已自动改用深色文字。把「背景遮罩」拉高、或换一张暗一点的图，就会恢复深色界面。';
+    } else {
+      E.bgHint.textContent = '已使用自定义背景（仅存本机）。觉得照片太抢眼就把「背景遮罩」拉高。';
+    }
   }
 }
 
@@ -847,8 +900,10 @@ function bindAppearance() {
           const c = document.createElement('canvas');
           c.width = Math.round((img.width || max) * scale);
           c.height = Math.round((img.height || max) * scale);
-          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-          actions.setBgImage && actions.setBgImage(c.toDataURL('image/jpeg', 0.82));
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0, c.width, c.height);
+          const lum = sampleLum(c);
+          actions.setBgImage && actions.setBgImage(c.toDataURL('image/jpeg', 0.82), lum);
         };
         img.src = reader.result;
       };
@@ -1007,6 +1062,8 @@ function makeDraggable(card, scope, key) {
 function startDrag(card, scope, key) {
   let over = null;
   let after = false;
+  let axis = 'y';
+  const cardRect = card.getBoundingClientRect();
   card.classList.add('dragging');
   card.style.pointerEvents = 'none';
   document.body.classList.add('is-dragging');
@@ -1014,21 +1071,28 @@ function startDrag(card, scope, key) {
   const clearMarks = () => {
     [...scope.children].forEach((c) => c.classList.remove('drop-before', 'drop-after'));
   };
+  // 同一行的卡片用 X 判断左右，不同行才用 Y——
+  // 否则一行四张卡时，水平拖动永远判成“插到前面”，看起来就是左拖右没反应。
+  const resolve = (ev, target) => {
+    const r = target.getBoundingClientRect();
+    const sameRow = Math.abs((r.top + r.height / 2) - (cardRect.top + cardRect.height / 2))
+      < Math.min(r.height, cardRect.height) * 0.6;
+    axis = sameRow ? 'x' : 'y';
+    after = sameRow
+      ? ev.clientX > r.left + r.width / 2
+      : ev.clientY > r.top + r.height / 2;
+    return sameRow;
+  };
   const move = (ev) => {
     const under = document.elementFromPoint(ev.clientX, ev.clientY);
     const target = cardOf(scope, under);
     if (target !== over) {
       clearMarks();
       over = null;
-      if (target && target !== card) {
-        over = target;
-        const r = target.getBoundingClientRect();
-        after = ev.clientY > r.top + r.height / 2;
-      }
+      if (target && target !== card) over = target;
     }
     if (over) {
-      const r = over.getBoundingClientRect();
-      after = ev.clientY > r.top + r.height / 2;
+      resolve(ev, over);
       over.classList.toggle('drop-before', !after);
       over.classList.toggle('drop-after', after);
     }
@@ -1040,7 +1104,7 @@ function startDrag(card, scope, key) {
       else if (ev.clientY > vr.bottom - 36) views.scrollTop += 14;
     }
   };
-  const up = () => {
+  const up = (ev) => {
     document.removeEventListener('pointermove', move);
     document.removeEventListener('pointerup', up);
     document.removeEventListener('pointercancel', up);
@@ -1049,8 +1113,25 @@ function startDrag(card, scope, key) {
     document.body.classList.remove('is-dragging');
     clearMarks();
     if (over) {
+      if (ev && ev.clientX != null) resolve(ev, over);
+      const before = new Map([...scope.children].map((c) => [c, c.getBoundingClientRect()]));
       if (after) over.after(card);
       else over.before(card);
+      // FLIP：让被挤开的卡片滑到新位置，而不是瞬移
+      [...scope.children].forEach((c) => {
+        const old = before.get(c);
+        if (!old) return;
+        const now = c.getBoundingClientRect();
+        const dx = old.left - now.left;
+        const dy = old.top - now.top;
+        if (!dx && !dy) return;
+        if (c.animate) {
+          c.animate(
+            [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+            { duration: 280, easing: 'cubic-bezier(.2, .8, .2, 1)' },
+          );
+        }
+      });
       savedOrder(scope, key);
       actions.renderCharts && actions.renderCharts();
     }

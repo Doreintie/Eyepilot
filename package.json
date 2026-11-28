@@ -1,6 +1,6 @@
 {
   "name": "eyepilot",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "private": true,
   "type": "module",
   "description": "EyePilot · 瞳行 — AI 专注与护眼助手（黑客松 Demo）",

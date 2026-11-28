@@ -102,6 +102,8 @@
     text-overflow: ellipsis; font-size: 10.5px; color: var(--amber);
   }
   .bar.alerting .alert-line { display: block; }
+  .alert-line { -webkit-app-region: no-drag; }
+  .alert-line.clickable { cursor: pointer; text-decoration: underline dotted rgba(243, 196, 112, .65); text-underline-offset: 3px; }
   .bar.alerting .blink, .bar.alerting .focus-chip, .bar.alerting .dist { display: none; }
   .mode.on {
     color: #06110f; background: var(--accent); border-color: var(--accent); font-weight: 700;
@@ -363,15 +365,56 @@
   }
 
   let barAlertTimer = 0;
+  let barAlertUntil = 0;
+  let barHint = null;
+
   function showBarAlert(text) {
     const bar = document.querySelector('.bar');
     const line = $('alertLine');
     if (!bar || !line) return;
     line.textContent = text || '该休息了';
+    line.classList.remove('clickable');
     bar.classList.add('alerting');
+    barAlertUntil = Date.now() + 8000;
     clearTimeout(barAlertTimer);
-    barAlertTimer = setTimeout(() => bar.classList.remove('alerting'), 8000);
+    barAlertTimer = setTimeout(() => {
+      barAlertUntil = 0;
+      if (barHint) {
+        line.textContent = barHint.text;
+        line.classList.toggle('clickable', !!barHint.action);
+      } else {
+        bar.classList.remove('alerting');
+      }
+    }, 8000);
   }
+
+  // 持续提示（健康异常 / 远眺）：不自动消失，指标恢复才收起
+  function showBarHint(hint) {
+    const bar = document.querySelector('.bar');
+    const line = $('alertLine');
+    if (!bar || !line) return;
+    barHint = hint;
+    if (Date.now() < barAlertUntil) return;
+    line.textContent = hint.text;
+    line.classList.toggle('clickable', !!hint.action);
+    bar.classList.add('alerting');
+  }
+
+  function clearBarHint() {
+    if (!barHint) return;
+    barHint = null;
+    if (Date.now() < barAlertUntil) return;
+    const bar = document.querySelector('.bar');
+    const line = $('alertLine');
+    if (bar) bar.classList.remove('alerting');
+    if (line) line.classList.remove('clickable');
+  }
+
+  $('alertLine').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!barHint || !barHint.action) return;
+    if (!preview && host && host.action) host.action(barHint.action);
+  });
 
   function render(p) {
     // 桌面版的推送里也带 items：勾掉「疲劳指数」就真的不显示，
@@ -419,6 +462,10 @@
       showBarAlert(p.alert.title);
     }
 
+    // 持续提示：远眺 / 健康异常。告警的 8 秒优先，过了再显示它
+    if (p.hint && p.hint.text) showBarHint(p.hint);
+    else clearBarHint();
+
     // 护眼弹层打开时强制收起，避免「弹层 + 岛」一起挡屏
     if (p.breakOpen && expanded) {
       manual = false;
@@ -434,6 +481,7 @@
         live: true,
         blink: cfg.items.blink === false ? 0 : 17,
         distance: 58,
+        hint: null,
         session: 4280,
         fatigue: cfg.items.fatigue === false ? 0 : 28,
         health: cfg.items.health === false ? 0 : 82,

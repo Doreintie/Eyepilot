@@ -38,22 +38,15 @@ export function initFocusSession() {
 
   root.innerHTML = `
     <div class="fv-wrap">
-      <div class="fv-bar">
-        <div class="fv-seg" data-seg>
-          <button class="on" data-scene="paper" data-gaze>纸质学习</button>
-          <button data-scene="screen" data-gaze>电脑学习</button>
-        </div>
-        <span class="fv-chip" data-live><i class="fv-dot"></i><span data-live-tx>摄像头未启动</span></span>
-      </div>
-
       <div class="fv-main">
         <section class="fv-glass fv-stage">
           <div class="fv-stage-head">
             <div>
               <div class="fv-eyebrow">Focus session</div>
               <h3>第 1 轮 · 25 分钟</h3>
-              <p data-sub>纸质学习 · 看书 / 写字</p>
+              <p data-sub>电脑学习 · 看网课 / 刷题</p>
             </div>
+            <span class="fv-chip" data-live><i class="fv-dot"></i><span data-live-tx>摄像头未启动</span></span>
           </div>
 
           <div class="fv-ringwrap"><div class="fv-ring">
@@ -79,7 +72,7 @@ export function initFocusSession() {
             <button class="fv-btn line" data-reset data-gaze>重置</button>
             <button class="fv-btn line" data-preview data-gaze>预览画面</button>
           </div>
-          <p class="fv-note" data-note>纸质场景不要求视线留在屏幕上；判定来自在座状态、眨眼与视距。手写动作当前无法从人脸关键点识别，请勿据此判断书写。</p>
+          <p class="fv-note" data-note>视线离开屏幕超过 6 秒会记一次分心；眨眼与视距异常会拉低专注分。</p>
           <div class="fv-preview" data-preview-box><video data-video playsinline muted></video></div>
         </section>
 
@@ -93,8 +86,8 @@ export function initFocusSession() {
             <div class="fv-metrics">
               <div><span>本次分心</span><b><span data-distract>0</span><u>次</u></b></div>
               <div><span>最长连续</span><b data-streak>00:00</b></div>
-              <div><span data-away-label>离座</span><b data-away>00:00</b></div>
-              <div><span data-pause-label>离座</span><b><span data-pause>0</span><u>次</u></b></div>
+              <div><span data-away-label>离屏</span><b data-away>00:00</b></div>
+              <div><span data-pause-label>离屏</span><b><span data-pause>0</span><u>次</u></b></div>
             </div>
           </section>
         </aside>
@@ -121,7 +114,7 @@ export function initFocusSession() {
         </summary>
         <div class="fv-more-grid">
           <section class="fv-pad fv-signals-card">
-            <div class="fv-card-h"><h3>传感信号</h3><span class="fv-tag" data-scene-tag>场景 A · 眼神不参与判定</span></div>
+            <div class="fv-card-h"><h3>传感信号</h3><span class="fv-tag" data-scene-tag>视线参与判定</span></div>
             <div class="fv-signals" data-signals></div>
           </section>
           <section class="fv-pad fv-insight">
@@ -130,7 +123,7 @@ export function initFocusSession() {
           </section>
         </div>
         <div class="fv-foot">
-          <span>信号在本地浏览器计算，不上传。纸质场景无法识别手部书写，仅按在座 / 生理信号估算。</span>
+          <span>信号在本地浏览器计算，不上传。判定基于视线是否离屏、是否长时间凝视，以及眨眼与视距。</span>
           <button class="fv-btn line" data-export data-gaze>导出会话报告</button>
         </div>
       </details>
@@ -146,10 +139,8 @@ export function initFocusSession() {
   const resetBtn = $('[data-reset]');
   const previewBtn = $('[data-preview]');
   const exportBtn = $('[data-export]');
-  const subEl = $('[data-sub]');
   const liveEl = $('[data-live]');
   const liveTx = $('[data-live-tx]');
-  const livePill = document.getElementById('focusLivePill');
   const scoreEl = $('[data-score]');
   const levelTx = $('[data-level-tx]');
   const levelTip = $('[data-level-tip]');
@@ -159,7 +150,6 @@ export function initFocusSession() {
   const pauseEl = $('[data-pause]');
   const awayLabel = $('[data-away-label]');
   const pauseLabel = $('[data-pause-label]');
-  const sceneTag = $('[data-scene-tag]');
   const signalsEl = $('[data-signals]');
   const insightEl = $('[data-insight]');
   const insightSrc = $('[data-insight-src]');
@@ -171,7 +161,7 @@ export function initFocusSession() {
     remain: TOTAL,
     running: false,
     finished: false,
-    scene: 'paper',
+    scene: 'screen',
     score: 92,
     trackedMs: 0,
     offMs: 0,
@@ -202,11 +192,6 @@ export function initFocusSession() {
   const setLive = (text) => {
     if (liveTx) liveTx.textContent = text;
     else liveEl.textContent = text;
-  };
-  const setPill = (text, state) => {
-    if (!livePill) return;
-    livePill.className = `pill tiny${state ? ` ${state}` : ''}`;
-    livePill.innerHTML = `<i class="dot"></i>${text}`;
   };
 
   const paint = () => {
@@ -243,40 +228,23 @@ export function initFocusSession() {
     const dash = '—';
     const rows = [];
 
-    if (S.scene === 'paper') {
-      const present = !!(frame && frame.present);
-      rows.push({
-        icon: '◉', name: '在座状态',
-        desc: present ? '检测到人脸，判定为在座' : '未检测到人脸，按离座处理',
-        val: present ? '在座' : '离座',
-        cls: present ? '' : 'hot',
-      });
-      const pitch = frame && Number.isFinite(frame.pitchDeg) ? Math.round(frame.pitchDeg) : null;
-      rows.push({
-        icon: '⌄', name: '头姿（参考）',
-        desc: '相对正脸的角度，仅展示不参与判定',
-        val: pitch === null ? dash : `${pitch}°`,
-        cls: '',
-      });
-    } else {
-      const valid = !!(gaze && gaze.valid && !gaze.outside);
-      const gLabel = !valid ? '未识别' : S.gazeState === 'stare' ? '凝固' : S.gazeState === 'drift' ? '偏移' : '稳定';
-      rows.push({
-        icon: '◎', name: '视线',
-        desc: valid
-          ? (S.gazeState === 'stare' ? '超过 8 秒无明显扫视，疑似盯着不读' : '视线在屏幕内')
-          : '视线离屏或置信度不足',
-        val: gLabel,
-        cls: !valid || S.gazeState === 'drift' ? 'hot' : S.gazeState === 'stare' ? 'cool' : '',
-      });
-      const yaw = frame && Number.isFinite(frame.yawDeg) ? Math.round(frame.yawDeg) : null;
-      rows.push({
-        icon: '⌄', name: '头姿',
-        desc: '相对正脸的偏航 / 俯仰',
-        val: yaw === null ? dash : `${yaw}° / ${Math.round(frame.pitchDeg || 0)}°`,
-        cls: '',
-      });
-    }
+    const valid = !!(gaze && gaze.valid && !gaze.outside);
+    const gLabel = !valid ? '未识别' : S.gazeState === 'stare' ? '凝固' : S.gazeState === 'drift' ? '偏移' : '稳定';
+    rows.push({
+      icon: '◎', name: '视线',
+      desc: valid
+        ? (S.gazeState === 'stare' ? '超过 8 秒无明显扫视，疑似盯着不读' : '视线在屏幕内')
+        : '视线离屏或置信度不足',
+      val: gLabel,
+      cls: !valid || S.gazeState === 'drift' ? 'hot' : S.gazeState === 'stare' ? 'cool' : '',
+    });
+    const yaw = frame && Number.isFinite(frame.yawDeg) ? Math.round(frame.yawDeg) : null;
+    rows.push({
+      icon: '⌄', name: '头姿',
+      desc: '相对正脸的偏航 / 俯仰',
+      val: yaw === null ? dash : `${yaw}° / ${Math.round(frame.pitchDeg || 0)}°`,
+      cls: '',
+    });
 
     const m = app.metrics || {};
     const blink = S.reliable && S.blink > 0 ? Math.round(S.blink) : dash;
@@ -303,24 +271,18 @@ export function initFocusSession() {
 
     if (S.running) {
       setLive('专注计时中');
-      setPill('正在记录', 'on');
     } else if (S.finished) {
       setLive('本轮完成');
-      setPill('本轮完成', 'on');
     } else if (S.remain < TOTAL) {
       setLive('已暂停');
-      setPill('已暂停', 'warn');
     } else {
       const present = !!(frame && frame.present);
       if (present) {
         setLive('摄像头已就绪');
-        setPill('摄像头已就绪', 'on');
       } else if (frame) {
         setLive('等待人脸入镜');
-        setPill('等待人脸入镜', 'warn');
       } else {
         setLive('摄像头未启动');
-        setPill('摄像头未启动', '');
       }
     }
   };
@@ -339,13 +301,10 @@ export function initFocusSession() {
       if (k === 'warn' || k === 'bad') worst[Math.floor(i / 12)]++;
     });
     const minute = worst.indexOf(Math.max(...worst)) + 1;
-    const cause = S.scene === 'paper'
-      ? '离座或眨眼明显下降'
-      : '视线离屏或长时间凝视不读';
+    const cause = '视线离屏或长时间凝视不读';
     insightSrc.textContent = '归因 · 真实信号';
     insightEl.textContent = `本次分心主要集中在第 ${minute} 分钟附近，常伴随${cause}；` +
-      `已记录 ${S.distractions} 次分心，最近平均专注分 ${avg}。` +
-      (S.scene === 'paper' ? '纸质场景不识别手写动作，以上仅基于在座与生理信号。' : '');
+      `已记录 ${S.distractions} 次分心，最近平均专注分 ${avg}。`;
   };
 
   const recordSlot = () => {
@@ -399,9 +358,7 @@ export function initFocusSession() {
     S.scores = [];
     S.score = 92;
     setLive('未开始');
-    note('已重置。' + (S.scene === 'paper'
-      ? '纸质场景按在座 / 眨眼 / 视距判定，手写动作无法识别。'
-      : '电脑场景按视线离屏与凝视不读判定。'));
+    note('已重置。电脑场景按视线离屏与凝视不读判定。');
     renderTimeline();
     buildInsight();
     paint();
@@ -428,29 +385,25 @@ export function initFocusSession() {
     const blinking = !!(frame && Number.isFinite(frame.open) && frame.open < 0.25);
     let onTask = false;
 
-    if (S.scene === 'screen') {
-      const valid = !!(gaze && gaze.valid && !gaze.outside);
-      onTask = valid;
-      if (valid) {
-        const nx = Number.isFinite(gaze.nx) ? gaze.nx : gaze.x / window.innerWidth;
-        const ny = Number.isFinite(gaze.ny) ? gaze.ny : gaze.y / window.innerHeight;
-        if (!S.gazeRef || Math.hypot(nx - S.gazeRef.x, ny - S.gazeRef.y) > 0.012) {
-          S.gazeRef = { x: nx, y: ny };
-          S.gazeStillMs = 0;
-          S.gazeState = 'stable';
-        } else {
-          S.gazeStillMs += dt;
-          if (S.gazeStillMs > 8000) S.gazeState = 'stare';
-        }
-      } else {
-        S.gazeState = 'drift';
+    const valid = !!(gaze && gaze.valid && !gaze.outside);
+    onTask = valid;
+    if (valid) {
+      const nx = Number.isFinite(gaze.nx) ? gaze.nx : gaze.x / window.innerWidth;
+      const ny = Number.isFinite(gaze.ny) ? gaze.ny : gaze.y / window.innerHeight;
+      if (!S.gazeRef || Math.hypot(nx - S.gazeRef.x, ny - S.gazeRef.y) > 0.012) {
+        S.gazeRef = { x: nx, y: ny };
         S.gazeStillMs = 0;
+        S.gazeState = 'stable';
+      } else {
+        S.gazeStillMs += dt;
+        if (S.gazeStillMs > 8000) S.gazeState = 'stare';
       }
     } else {
-      onTask = present;
+      S.gazeState = 'drift';
+      S.gazeStillMs = 0;
     }
 
-    if (blinking && S.scene === 'screen') {
+    if (blinking) {
       // 眨眼期间 gaze.valid 会短暂为 false，不按离屏累计
       S.streak += dt / 1000;
     } else if (onTask) {
@@ -469,11 +422,11 @@ export function initFocusSession() {
       S.pauseCount++;
       S.offMs = 0;
       beep('warn');
-      note(`第 ${S.distractions} 次${S.scene === 'paper' ? '离座' : '离屏'}已记录，把注意力拉回当前任务。`);
+      note(`第 ${S.distractions} 次离屏已记录，把注意力拉回当前任务。`);
     }
 
-    let target = S.scene === 'paper' ? 92 : (Number(m.focus) > 0 ? Number(m.focus) : 90);
-    if (S.scene === 'screen' && S.gazeState === 'stare') target -= 12;
+    let target = Number(m.focus) > 0 ? Number(m.focus) : 90;
+    if (S.gazeState === 'stare') target -= 12;
     if (S.blink > 0 && S.blink < 8) target -= 10;
     if (S.distance > 0 && S.distance < 42) target -= 8;
     if (!present) target -= 28;
@@ -498,9 +451,7 @@ export function initFocusSession() {
     S.lastFrameAt = performance.now();
     if (S.running) {
       setLive('专注计时中');
-      note(S.scene === 'paper'
-        ? '纸质场景已开始。视线可以离开屏幕，判定来自在座状态、眨眼与视距。'
-        : '电脑场景已开始。视线离开屏幕超过 6 秒会记一次分心。');
+      note('已开始。视线离开屏幕超过 6 秒会记一次分心。');
     } else {
       setLive('已暂停');
       note('已暂停，暂停期间不记分心。');
@@ -509,28 +460,6 @@ export function initFocusSession() {
   });
 
   resetBtn.addEventListener('click', reset);
-
-  $('[data-seg]').addEventListener('click', (ev) => {
-    const btn = ev.target.closest('[data-scene]');
-    if (!btn || btn.dataset.scene === S.scene) return;
-    [...$('[data-seg]').children].forEach((b) => b.classList.remove('on'));
-    btn.classList.add('on');
-    S.scene = btn.dataset.scene;
-    S.gazeRef = null;
-    S.gazeStillMs = 0;
-    S.offMs = 0;
-    const paper = S.scene === 'paper';
-    subEl.textContent = paper ? '纸质学习 · 看书 / 写字' : '电脑学习 · 看网课 / 刷题';
-    sceneTag.textContent = paper ? '场景 A · 眼神不参与判定' : '场景 B · 眼神参与判定';
-    awayLabel.textContent = paper ? '离座' : '离屏';
-    pauseLabel.textContent = paper ? '离座' : '离屏';
-    note(paper
-      ? '已切换纸质学习。手写动作无法从人脸关键点识别，只按在座与生理信号估算。'
-      : '已切换电脑学习。视线离屏或长时间凝视会被记录。');
-    toast(paper ? '已切换到纸质学习' : '已切换到电脑学习', paper ? '眼神判定关闭' : '眼神判定启用', 'info', 2200);
-    renderSignals();
-    paint();
-  });
 
   const stopPreview = () => {
     if (!previewStream) return;
@@ -561,7 +490,7 @@ export function initFocusSession() {
     const ratePct = rate();
     const avg = S.scores.length
       ? Math.round(S.scores.reduce((a, b) => a + b, 0) / S.scores.length) : Math.round(S.score);
-    const sceneName = S.scene === 'paper' ? '纸质学习' : '电脑学习';
+    const sceneName = '电脑学习';
     const md = [
       '# EyePilot 专注会话报告',
       '',
@@ -580,9 +509,7 @@ export function initFocusSession() {
       '',
       '## 说明',
       '',
-      S.scene === 'paper'
-        ? '纸质学习场景不识别手写动作；判定基于在座状态、眨眼频率与几何估算视距。'
-        : '电脑学习场景基于视线是否在屏幕内、是否存在长时间凝视，以及眨眼与视距信号。',
+      '电脑学习场景基于视线是否在屏幕内、是否存在长时间凝视，以及眨眼与视距信号。',
       '视距为单目几何估算，只适合看相对变化；本报告为行为学估算，不构成医疗诊断。',
       '',
     ].join('\n');
@@ -607,7 +534,7 @@ export function initFocusSession() {
     score: Math.round(S.score),
     remain: Math.max(0, Math.round(S.remain / 1000)),
     total: Math.round(TOTAL / 1000),
-    scene: S.scene,
+    scene: 'screen',
     label: level(S.score).label,
     streakMin: Math.round(S.streak / 60000),
   });

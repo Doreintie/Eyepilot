@@ -603,9 +603,12 @@ const actions = {
     saveSettings({ themeMode: mode });
     ui.applyAppearance();
   },
-  setBgImage: (dataUrl) => {
+  setBgImage: (dataUrl, lum) => {
     try {
-      saveSettings({ bgImage: dataUrl || '' });
+      saveSettings({
+        bgImage: dataUrl || '',
+        bgLum: dataUrl && lum != null ? Number(lum) : null,
+      });
     } catch {
       ui.toast('背景图太大', '换一张分辨率低一点的图片，或先压缩', 'warn', 4200);
       return;
@@ -621,7 +624,7 @@ const actions = {
     ui.applyAppearance();
   },
   setCardAlpha: (v) => {
-    saveSettings({ cardAlpha: Math.max(20, Math.min(100, Number(v) || 58)) });
+    saveSettings({ cardAlpha: Math.max(0, Math.min(100, Number(v))) });
     ui.applyAppearance();
   },
   resetLayout: () => {
@@ -827,6 +830,33 @@ const actions = {
 
 /* ---------------- 灵动岛 ---------------- */
 
+/** 灵动岛的持续提示：异常指标要持续一段时间才提示，避免闪一下就骚扰 */
+const islandHintState = { at: 0, blink: 0, dist: 0, fatigue: 0 };
+
+function computeIslandHint() {
+  const m = app.metrics || {};
+  const now = Date.now();
+  const dt = islandHintState.at ? Math.min(2000, now - islandHintState.at) : 0;
+  islandHintState.at = now;
+  const blinkBad = m.blinkRate > 0 && m.blinkRate < 10;
+  const distBad = m.distance > 0 && m.distance < 42;
+  const fatigueBad = Number(m.fatigue) >= (app.settings.fatigueThreshold || 65);
+  islandHintState.blink = blinkBad ? islandHintState.blink + dt : 0;
+  islandHintState.dist = distBad ? islandHintState.dist + dt : 0;
+  islandHintState.fatigue = fatigueBad ? islandHintState.fatigue + dt : 0;
+
+  const limit = (app.settings.breakMinutes || 20) * 60000;
+  if (health.breakActive) {
+    const left = Math.max(0, Math.ceil((20000 - (Date.now() - health.breakStart)) / 1000));
+    return { text: `远眺中 · 还剩 ${left} 秒`, action: 'break' };
+  }
+  if (health.continuousMs > limit * 0.92) return { text: '该远眺了 · 点我开始', action: 'break' };
+  if (islandHintState.dist > 120000) return { text: '距离过近 · 已超 2 分钟', action: 'eyecare' };
+  if (islandHintState.blink > 120000) return { text: '眨眼偏少 · 已超 2 分钟', action: 'eyecare' };
+  if (islandHintState.fatigue > 180000) return { text: '疲劳偏高 · 建议休息', action: 'eyecare' };
+  return null;
+}
+
 function islandPayload() {
   const m = app.metrics || {};
   const isl = app.settings.island || {};
@@ -848,6 +878,11 @@ function islandPayload() {
     fatigue: Math.round(m.fatigue || 0),
     health: Math.round(m.health || 0),
     focus: Math.round(m.focus || 0),
+    hint: computeIslandHint(),
+    break: {
+      active: !!health.breakActive,
+      due: !health.breakActive && health.continuousMs > ((app.settings.breakMinutes || 20) * 60000) * 0.92,
+    },
     session: sec,
     nextBreak: Math.round(left / 1000),
     focusSession: focusSession.snapshot(),
@@ -889,6 +924,7 @@ function bindDesktop() {
     else if (name === 'refine') { showView('settings'); ui.startAlign(); }
     else if (name === 'settings') showView('settings');
     else if (name === 'eyecare') showView('eyecare');
+    else if (name === 'break') actions.startBreak('island');
     else if (name.startsWith('mode:')) actions.setControlMode(name.slice(5));
     else if (name === 'report') { showView('coach'); actions.report(); }
     else if (name === 'toggle-pause') {

@@ -5,9 +5,20 @@
 AI 专注 + 护眼 + 助手：25 分钟专注会话、用眼健康监测、护眼训练与 AI 建议。不需要 Tobii 之类的红外眼动仪，笔记本自带的摄像头就够；眼控是可选的输入方式之一。所有画面在本机浏览器里处理，不上传。
 
 > 校园黑客松参赛作品 · 主题「AI + 眼动交互 / 视觉健康」
-> **当前版本 v1.9.0** · [更新记录](CHANGELOG.md)
+> **当前版本 v1.9.1** · [更新记录](CHANGELOG.md)
 
 ---
+
+## 本版更新（v1.9.1 · 2026-11-28）
+
+**收口与可读性修整。**
+
+- **自适应对比度**：深色主题 + 很亮的自定义背景时，自动改用深色文字（等价浅色界面），背景图保留；把「背景遮罩」拉高或换暗图就自动切回。
+- **专注页精简**：删掉副标题、「纸质学习 / 电脑学习」切换与右上状态胶囊，只保留电脑学习；状态芯片移到计时卡标题右侧，时间轴无需滚动即可完整显示。问号只展开「专注与护眼」这一节帮助。
+- **面板不透明度**：滑块范围改为 0–100%，0% 时玻璃底色、白纱高光、模糊与边框全部去掉，真正完全透明。
+- **拖动**：修复同一行卡片「左拖右没反应」（改按 X 轴判定），并加 FLIP 动画与被拖卡片的抬升阴影。
+- **外观预览**：「更多菜单」预览改为横排三项、字号与色块放大，看得清实际效果。
+- **健康提示**：新增 PERCLOS 解释；眨眼偏少 / 距离过近 / 疲劳偏高持续 2 分钟以上，或到 20-20-20 时间，灵动岛会持续亮一行提示，点一下可开始远眺。注视热力图降低模糊、热区边界更清楚。
 
 ## 本版更新（v1.9.0 · 2026-11-28）
 
@@ -72,7 +83,7 @@ AI 专注 + 护眼 + 助手：25 分钟专注会话、用眼健康监测、护�
 | 体积 | 约 148 MB（自带 Chromium） | 约 21 MB（用系统浏览器） |
 | 适合 | 答辩现场、自己电脑 | 微信/QQ 传给别人、快速体验 |
 
-三个包都在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 里：`EyePilot-install-1.9.0.exe`（一键安装）/ `EyePilot-Desktop-v1.9.0-win64.zip`（免安装）/ `EyePilot-Demo-v1.9.0-win64.zip`（网页版）。
+三个包都在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 里：`EyePilot-install-1.9.1.exe`（一键安装）/ `EyePilot-Desktop-v1.9.1-win64.zip`（免安装）/ `EyePilot-Demo-v1.9.1-win64.zip`（网页版）。
 
 **网页版**自带官方 Python 便携运行时（`runtime/`），收件人不需要安装 Python；系统里已有 Python 也会自动复用。
 
@@ -383,7 +394,7 @@ eyepilot/
 
 两个打包产物体积超过 Git 仓库的常规范围，不随源码提交，放在 [Releases](https://github.com/Doreintie/Eyepilot/releases) 附件里。按对方情况选一个发：
 
-**1. 一键安装 `EyePilot-install-1.9.0.exe`（约 143 MB）**
+**1. 一键安装 `EyePilot-install-1.9.1.exe`（约 143 MB）**
 
 - 解压后双击 `EyePilot.exe`，独立窗口运行，看不到浏览器地址栏。
 - 摄像头权限由应用自己处理，不会弹浏览器的权限框。
@@ -392,9 +403,9 @@ eyepilot/
   或右键压缩包 → 属性 → 勾选“解除锁定”再解压。
 - 微信若提示超过 100 MB，改用 QQ / 网盘发送，或发下面的网页版。
 
-**2. 免安装 `EyePilot-Desktop-v1.9.0-win64.zip`（约 178 MB）**
+**2. 免安装 `EyePilot-Desktop-v1.9.1-win64.zip`（约 178 MB）**
 
-**3. 网页版 `EyePilot-Demo-v1.9.0-win64.zip`（约 37 MB）**
+**3. 网页版 `EyePilot-Demo-v1.9.1-win64.zip`（约 37 MB）**
 
 - 解压后双击 `启动.bat`，会自动打开默认浏览器。
 - 自带 Python 运行时，无需安装、无需联网（模型已本地化）。
@@ -414,7 +425,7 @@ eyepilot/
 python serve.py
 ```
 
-需要“解压即用”的免安装包，请到 [Releases](https://github.com/Doreintie/Eyepilot/releases) 下载 `EyePilot-Demo-v1.9.0-win64.zip`。
+需要“解压即用”的免安装包，请到 [Releases](https://github.com/Doreintie/Eyepilot/releases) 下载 `EyePilot-Demo-v1.9.1-win64.zip`。
 
 ---
 

@@ -57,6 +57,7 @@ export const DEFAULT_SETTINGS = {
   themeMode: 'dark',      // dark | light | system
   bgImage: '',            // 自定义背景（dataURL，仅本地）
   bgDim: 45,
+  bgLum: null,            // 自定义背景的平均亮度，用于自动对比度
   cardAlpha: 58,          // 玻璃卡片空白处的底色不透明度（%）
   closeToTray: true,      // 关窗口后继续在托盘运行（桌面版）
   layout: {},             // 各视图卡片的拖动顺序

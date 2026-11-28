@@ -97,6 +97,12 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 .sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
 .fine { color: var(--dim); font-size: 11.5px; line-height: 1.6; }
 .fine.warn-text { color: var(--warn); }
+.kpi-q {
+  display: inline-grid; place-items: center; width: 13px; height: 13px; margin-left: 2px;
+  border-radius: 50%; border: 1px solid var(--line-2); font-size: 8.5px; font-style: normal;
+  color: var(--dim); cursor: help; vertical-align: 1px;
+}
+.kpi-q:hover { color: var(--text); border-color: var(--accent); }
 .eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: .22em; color: var(--accent); text-transform: uppercase; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -287,6 +293,23 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 .eye-ui .rail-more-menu .rail-btn span { font-size: 10.5px; }
 @keyframes moreIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
 
+/* 面板不透明度 0%：真正的透明，只留文字 */
+:root[data-glass="0"] .card,
+:root[data-glass="0"] .topbar,
+:root[data-glass="0"] .rail,
+:root[data-glass="0"] .tile,
+:root[data-glass="0"] .fv-glass {
+  background: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+:root[data-glass="0"] .card::after,
+:root[data-glass="0"] .fv-glass::after { display: none; }
+:root[data-glass="0"] .topbar { border-bottom-color: transparent !important; }
+:root[data-glass="0"] .rail { border-right-color: transparent !important; }
+
 /* 拖动排序 */
 .card-head h3, .fv-card-h h3 { margin-right: auto; }
 .drag-handle {
@@ -299,7 +322,11 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none; }
 .drag-handle:hover { opacity: 1; background: var(--panel-2); }
 .drag-handle.floating { position: absolute; top: 8px; right: 8px; z-index: 4; background: color-mix(in srgb, var(--panel) 70%, transparent); }
-.card.dragging { opacity: .5; }
+.card.dragging {
+  opacity: .62; transform: scale(1.015); z-index: 6;
+  box-shadow: 0 22px 46px -20px rgba(0, 0, 0, .55);
+}
+.card.drop-before, .card.drop-after { transition: box-shadow .12s ease; }
 .card.drop-before { box-shadow: 0 -2px 0 0 var(--accent), var(--shadow); }
 .card.drop-after { box-shadow: 0 2px 0 0 var(--accent), var(--shadow); }
 
@@ -1097,7 +1124,7 @@ input[type="range"]::-webkit-slider-thumb {
 .island-custom input:focus { outline: none; border-color: var(--accent); }
 .apx-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 6px; }
 .apx {
-  position: relative; height: 86px; border-radius: 12px; overflow: hidden;
+  position: relative; height: 96px; border-radius: 12px; overflow: hidden;
   border: 1px solid var(--line-2);
   background: url("../assets/bg-iceland.jpg") center 40% / cover no-repeat;
   display: flex; align-items: flex-start; justify-content: space-between;
@@ -1110,12 +1137,18 @@ input[type="range"]::-webkit-slider-thumb {
 .apx-menu::after { display: none; }
 .apx-menu b, .apx-menu small { text-shadow: none; }
 .apx-menu-card {
-  position: absolute; left: 50%; top: 61%; transform: translate(-50%, -50%);
-  width: 72px; padding: 3px; border-radius: 8px; z-index: 2;
+  position: absolute; left: 50%; top: 63%; transform: translate(-50%, -50%);
+  width: 196px; padding: 5px; border-radius: 10px; z-index: 2;
+  display: flex; align-items: stretch; gap: 3px;
   background: rgba(8, 15, 25, var(--menu-alpha, .92));
-  border: 1px solid var(--line-2); box-shadow: 0 8px 20px rgba(0,0,0,.35);
+  border: 1px solid var(--line-2); box-shadow: 0 10px 24px rgba(0,0,0,.4);
 }
-.apx-menu-card i { display: block; text-align: center; font-style: normal; font-size: 8px; line-height: 1.8; color: var(--text); }
+.apx-menu-card i {
+  flex: 1; display: block; text-align: center; font-style: normal;
+  font-size: 10.5px; line-height: 1.6; padding: 6px 0; border-radius: 6px;
+  color: var(--text); white-space: nowrap;
+}
+.apx-menu-card i:first-child { background: rgba(46, 230, 214, .12); }
 :root[data-theme="light"] .apx-menu-card { background: rgba(250, 252, 255, var(--menu-alpha, .92)); }
 @media (max-width: 760px) { .apx-row { grid-template-columns: minmax(0, 1fr); } }
 

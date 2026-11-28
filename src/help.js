@@ -35,9 +35,10 @@ const SECTIONS = [
     id: 'focus',
     title: '专注与护眼',
     items: [
-      ['专注分是怎么算的？', '纸质场景基准 92 分；电脑场景用实时专注度（无数据时按 90）。扣分项：盯住不动 −12、眨眼低于 8 次/分 −10、视距小于 42cm −8、人脸离开画面 −28、离屏超过 2 秒 −18。分数限制在 20–99，并按 0.7 秒时间常数平滑，每 5 秒记一格。等级：≥85 深度专注、≥65 正常、≥40 轻度分心、低于 40 分心。'],
-      ['什么算一次「分心」？', '电脑场景下视线离开屏幕超过 6 秒记一次，两次之间至少间隔 20 秒；纸质场景按离座判定。'],
+      ['专注分是怎么算的？', '基准是实时专注度（无数据时按 90）。扣分项：盯住不动 −12、眨眼低于 8 次/分 −10、视距小于 42cm −8、人脸离开画面 −28、离屏超过 2 秒 −18。分数限制在 20–99，并按 0.7 秒时间常数平滑，每 5 秒记一格。等级：≥85 深度专注、≥65 正常、≥40 轻度分心、低于 40 分心。'],
+      ['什么算一次「分心」？', '视线离开屏幕超过 6 秒记一次，两次之间至少间隔 20 秒；人脸完全离开画面也按离屏累计。'],
       ['分数一开始就是 92，正常吗？', '正常。那是初始值，开始专注后才会被真实信号逐步拉向实际状态；没开摄像头时不会有波动。'],
+      ['PERCLOS 是什么意思？', 'PERCLOS = 眼睛闭合时间占比（Percentage of Eyelid Closure over the Pupil over Time）。统计窗口内眼睛闭合超过 80% 的时间越长，这个值越高，是疲劳研究里的经典指标。本程序用 1 分钟滑动窗口估算，长时间偏高时灵动岛也会提示。'],
       ['提醒太频繁 / 太吵？', '设置 → 健康提醒，可分别关掉眨眼、距离、环境光、20-20-20，也可以关「提示音」，或把疲劳阈值调高、休息间隔调长。'],
       ['护眼操有声音吗？', '有提示音（可在健康提醒里关）。每节 20 秒，做完自动进入下一节。'],
     ],
@@ -90,8 +91,9 @@ export function initHelp() {
         <span class="eyebrow">HELP</span>
         <button class="btn link sm" id="helpClose">关闭</button>
       </div>
-      <h2>常见问题</h2>
-      <p class="gate-lead">按使用顺序排好了：遇到问题先看对应那一节。</p>
+      <h2 id="helpTitle">常见问题</h2>
+      <p class="gate-lead" id="helpLead">按使用顺序排好了：遇到问题先看对应那一节。</p>
+      <button class="btn link sm" id="helpAll" hidden>查看全部问题 →</button>
       <div class="help-body" id="helpBody"></div>
     </div>`;
   document.body.appendChild(root);
@@ -113,6 +115,7 @@ export function initHelp() {
     btn.parentElement.classList.toggle('open');
   });
   root.querySelector('#helpClose').addEventListener('click', closeHelp);
+  root.querySelector('#helpAll').addEventListener('click', () => openHelp());
   root.addEventListener('click', (ev) => { if (ev.target === root) closeHelp(); });
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && root.classList.contains('open')) closeHelp();
@@ -122,12 +125,30 @@ export function initHelp() {
 export function openHelp(section) {
   if (!root) initHelp();
   root.classList.add('open');
-  const target = section ? root.querySelector(`[data-help-sec="${section}"]`) : null;
   const body = root.querySelector('#helpBody');
+  const title = root.querySelector('#helpTitle');
+  const lead = root.querySelector('#helpLead');
+  const allBtn = root.querySelector('#helpAll');
+  const target = section ? root.querySelector(`[data-help-sec="${section}"]`) : null;
+
+  // 从某个页面点进来（例如专注页的问号）只显示那一节，避免在一屏 FAQ 里翻找
+  body.querySelectorAll('[data-help-sec]').forEach((sec) => {
+    sec.hidden = !!target && sec !== target;
+  });
+  body.querySelectorAll('[data-help-sec] > h3').forEach((h) => { h.style.display = ''; });
   if (target) {
-    body.scrollTop = target.offsetTop - body.offsetTop - 6;
+    const h3 = target.querySelector('h3');
+    if (h3) h3.style.display = 'none';
+    const secTitle = h3?.textContent || '';
+    if (title) title.textContent = `${secTitle} · 帮助`;
+    if (lead) lead.textContent = '这里只列出与当前页面有关的说明；需要更多可以去左下角「帮助」。';
+    if (allBtn) allBtn.hidden = false;
+    body.scrollTop = 0;
     target.querySelectorAll('.help-q').forEach((q) => q.classList.add('open'));
   } else {
+    if (title) title.textContent = '常见问题';
+    if (lead) lead.textContent = '按使用顺序排好了：遇到问题先看对应那一节。';
+    if (allBtn) allBtn.hidden = true;
     body.scrollTop = 0;
   }
 }

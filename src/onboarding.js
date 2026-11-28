@@ -134,8 +134,8 @@ const STEPS = [
   {
     view: 'focus',
     target: '#focusSessionRoot .fv-actions',
-    title: '纸质 / 电脑两种场景',
-    text: '纸质学习只按在座、眨眼与视距判定，不要求盯着屏幕；电脑学习会看视线是否离屏、是否长时间凝视。可随时暂停。',
+    title: '开始与暂停',
+    text: '点「开始专注」后开始计时，视线离开屏幕超过 6 秒记一次分心，长时间凝视不读也会拉低分数；可随时暂停。',
     place: 'top',
   },
   {
